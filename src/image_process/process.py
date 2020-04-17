@@ -4,10 +4,8 @@ import cv2
 import numpy
 import pathlib
 import shutil
-import traceback
 from matplotlib import pyplot
 from typing import List, Optional, Protocol, Tuple
-from image_process import exception
 
 
 def add_texts(image: numpy.array, texts: List[str], position: Tuple[int, int]):
@@ -262,17 +260,11 @@ class BinarizingMovie:
 
   def execute(self):
     """binarizing process
-
-    Raises:
-        ValueError: when 'low' threshold value is higher than 'high'
     """
     if self.get_threshold_parameter() is not None:
-      try:
-        low, high = self.get_threshold_parameter()
-        if high <= low:
-          raise ValueError("high luminance threshold must be > low")
-      except Exception:
-        print(traceback.format_exc())
+      thresholds = self.get_threshold_parameter()
+      if thresholds[1] <= thresholds[0]:
+        print("high luminance threshold must be > low")
         return
 
     output_path_list = get_output_path(self.get_movie_list(), "binarized")
@@ -286,7 +278,9 @@ class BinarizingMovie:
       ret, frame = cap.read()
       gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
       if self.get_threshold_parameter() is None:
-        low, high = self.select_threshold_parameter(movie, gray)
+        thresholds = self.select_threshold_parameter(movie, gray)
+        if thresholds is None:
+          continue
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -297,16 +291,13 @@ class BinarizingMovie:
         if not ret:
           break
         gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        ret, bin_1 = cv2.threshold(gray, low, 255, cv2.THRESH_TOZERO)
-        ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
+        ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
+        ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
         output.write(bin_2)
 
 
 class BinarizingPicture:
   """class to binarize picture
-
-  Raises:
-      ValueError: when 'low' threshold value is higher than 'high'
   """
 
   def __init__(
@@ -331,17 +322,11 @@ class BinarizingPicture:
 
   def execute(self):
     """binarizing process
-
-    Raises:
-        ValueError: when 'low' threshold value is higher than 'high'
     """
     if self.get_threshold_parameter() is not None:
-      try:
-        low, high = self.get_threshold_parameter()
-        if high <= low:
-          raise ValueError("high luminance threshold must be > low")
-      except Exception:
-        print(traceback.format_exc())
+      thresholds = self.get_threshold_parameter()
+      if thresholds[1] <= thresholds[0]:
+        print("high luminance threshold must be > low")
         return
 
     output_path_list = get_output_path(self.get_picture_list(), "binarized")
@@ -357,9 +342,11 @@ class BinarizingPicture:
         img = cv2.imread(picture)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self.get_threshold_parameter() is None:
-          low, high = self.select_threshold_parameter(picture, gray)
-        ret, bin_1 = cv2.threshold(gray, low, 255, cv2.THRESH_TOZERO)
-        ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
+          thresholds = self.select_threshold_parameter(picture, gray)
+          if thresholds is None:
+            continue
+        ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
+        ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
         cv2.imwrite(str(pathlib.Path(output_path / picture_path.name)), bin_2)
 
       elif picture_path.is_dir():
@@ -369,28 +356,29 @@ class BinarizingPicture:
         img = cv2.imread(str(p_list[0]))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self.get_threshold_parameter() is None:
-          low, high = self.select_threshold_parameter(picture, gray)
+          thresholds = self.select_threshold_parameter(picture, gray)
+          if thresholds is None:
+            continue
 
         for p in p_list:
           img = cv2.imread(str(p))
           gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-          ret, bin_1 = cv2.threshold(gray, low, 255, cv2.THRESH_TOZERO)
-          ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
+          ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
+          ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
           cv2.imwrite(str(pathlib.Path(output_path / p.name)), bin_2)
 
 
-def select_threshold_parameter(picture: str, img: numpy.array) -> Tuple[int, int]:
+def select_threshold_parameter(
+  picture: str, img: numpy.array
+) -> Optional[Tuple[int, int]]:
   """select(get) threshold values for binarization using GUI window
 
   Args:
       picture (str): name of image
       img (numpy.array): cv2 image object
 
-  Raises:
-      exception.GUIAbortPressedError: when 'abort' button is pressed
-
   Returns:
-      Tuple[int, int]: [low, high] threshold values
+      Optional[Tuple[int, int]]: [low, high] threshold values
   """
   cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
   cv2.createTrackbar("low", picture, 0, 255, no)
@@ -421,11 +409,13 @@ def select_threshold_parameter(picture: str, img: numpy.array) -> Tuple[int, int
 
     elif k == ord("q"):
       cv2.destroyAllWindows()
-      raise exception.GUIAbortPressedError("'q' is pressed. abort")
+      print("'q' is pressed. abort")
+      return None
 
     elif k == 27:
       cv2.destroyAllWindows()
-      raise exception.GUIAbortPressedError("'Esq' is pressed. abort")
+      print("'Esq' is pressed. abort")
+      return None
 
 
 class CapturingMovie:
@@ -460,16 +450,16 @@ class CapturingMovie:
   def execute(self):
     """capturing process"""
     if self.get_time_parameter() is not None:
-      start_time, stop_time, time_step = self.get_time_parameter()
-      try:
-        if stop_time - start_time <= time_step:
-          raise ValueError("difference between stop and start must be > time step")
-        if stop_time <= start_time:
-          raise ValueError("stop must be > start")
-        if time_step < 0.001:
-          raise ValueError("time step must be > 0")
-      except Exception:
-        print(traceback.format_exc())
+      time_parameter = self.get_time_parameter()
+
+      if time_parameter[1] - time_parameter[0] <= time_parameter[2]:
+        print("difference between stop and start must be > time step")
+        return
+      if time_parameter[1] <= time_parameter[0]:
+        print("stop must be > start")
+        return
+      if time_parameter[2] < 0.001:
+        print("time step must be > 0")
         return
 
     output_path_list = get_output_path(self.get_movie_list(), "captured")
@@ -481,26 +471,26 @@ class CapturingMovie:
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_time_parameter() is None:
-        start_time, stop_time, time_step = self.select_time_parameter(
-          movie, frames, fps, cap
-        )
-      capture_time = start_time
+        time_parameter = self.select_time_parameter(movie, frames, fps, cap)
+        if time_parameter is None:
+          continue
+      capture_time = time_parameter[0]
 
-      while capture_time <= stop_time:
+      while capture_time <= time_parameter[1]:
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, round(capture_time * fps))
         ret, frame = cap.read()
         cv2.imwrite(
           "{0}/{1:08}_ms.jpg".format(
-            str(output_path), int(round(capture_time - start_time, 3) * 1000)
+            str(output_path), int(round(capture_time - time_parameter[0], 3) * 1000)
           ),
           frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
-        capture_time += time_step
+        capture_time += time_parameter[2]
 
   def select_time_parameter(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
-  ) -> Tuple[float, float, float]:
+  ) -> Optional[Tuple[float, float, float]]:
     """select(get) parametes for capture using GUI window
 
     Args:
@@ -509,11 +499,8 @@ class CapturingMovie:
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
-    Raises:
-        exception.GUIAbortPressedError: when 'abort' button is pressed
-
     Returns:
-        Tuple[float, float, float]:: [start, stop, step] parameters for capturing movie (s).
+        Optional[Tuple[float, float, float]]: [start, stop, step] parameters for capturing movie (s).
     """
     tick = 100 if 100 < frames else frames
     tick_s = (int)(frames / 100) if 100 < frames else 1
@@ -552,9 +539,8 @@ class CapturingMovie:
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
       ret, frame = cap.read()
-      gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
       add_texts_upper_left(
-        gray,
+        frame,
         [
           "[capture]",
           "select start,stop,step",
@@ -564,9 +550,9 @@ class CapturingMovie:
           "step: {0:.2f}s".format(time_step),
         ],
       )
-      add_texts_lower_right(gray, ["s: save", "q/esc: abort"])
-      add_texts_lower_left(gray, warning_message)
-      cv2.imshow(movie, gray)
+      add_texts_lower_right(frame, ["s: save", "q/esc: abort"])
+      add_texts_lower_left(frame, warning_message)
+      cv2.imshow(movie, frame)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
@@ -585,11 +571,13 @@ class CapturingMovie:
 
       elif k == ord("q"):
         cv2.destroyAllWindows()
-        raise exception.GUIAbortPressedError("'q' is pressed. abort")
+        print("'q' is pressed. abort")
+        return None
 
       elif k == 27:
         cv2.destroyAllWindows()
-        raise exception.GUIAbortPressedError("'Esc' is pressed. abort")
+        print("'Esc' is pressed. abort")
+        return None
 
 
 class CroppingMovie:
@@ -625,12 +613,9 @@ class CroppingMovie:
     """capturing process
     """
     if self.get_position_parameter() is not None:
-      try:
-        x_1, y_1, x_2, y_2 = self.get_position_parameter()
-        if x_2 <= x_1 or y_2 <= y_1:
-          raise ValueError("2nd position must be > 1st")
-      except Exception:
-        print(traceback.format_exc())
+      positions = self.get_position_parameter()
+      if positions[2] <= positions[0] or positions[3] <= positions[1]:
+        print("2nd position must be > 1st")
         return
 
     output_path_list = get_output_path(self.get_movie_list(), "cropped")
@@ -643,9 +628,12 @@ class CroppingMovie:
       W, H, frames, fps = get_movie_info(cap)
       ret, frame = cap.read()
       if self.get_position_parameter() is None:
-        x_1, y_1, x_2, y_2 = self.select_position_parameter(movie, frame)
+        positions = select_position_parameter(movie, frame)
+        if positions is None:
+          continue
+
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-      size = (int(x_2 - x_1), int(y_2 - y_1))
+      size = (int(positions[2] - positions[0]), int(positions[3] - positions[1]))
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
@@ -654,7 +642,7 @@ class CroppingMovie:
         ret, frame = cap.read()
         if not ret:
           break
-        cropped = frame[y_1:y_2, x_1:x_2]
+        cropped = frame[positions[1] : positions[3], positions[0] : positions[2]]
         output.write(
           cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
         )
@@ -691,17 +679,11 @@ class CroppingPicture:
 
   def execute(self):
     """cropping process
-
-    Raises:
-        ValueError: when 'abort' button is pressed
     """
     if self.get_position_parameter() is not None:
-      try:
-        x_1, y_1, x_2, y_2 = self.get_position_parameter()
-        if x_2 <= x_1 or y_2 <= y_1:
-          raise ValueError("2nd position must be > 1st")
-      except Exception:
-        print(traceback.format_exc())
+      positions = self.get_position_parameter()
+      if positions[2] <= positions[0] or positions[3] <= positions[1]:
+        print("2nd position must be larger than 1st")
         return
 
     output_path_list = get_output_path(self.get_picture_list(), "cropped")
@@ -716,8 +698,11 @@ class CroppingPicture:
         print("cropping picture '{0}'...".format(picture))
         img = cv2.imread(picture)
         if self.get_position_parameter() is None:
-          x_1, y_1, x_2, y_2 = self.select_position_parameter(picture, img)
-        cropped = img[y_1:y_2, x_1:x_2]
+          positions = select_position_parameter(picture, img)
+          if positions is None:
+            continue
+
+        cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
         cv2.imwrite(
           str(pathlib.Path(output_path / picture_path.name)),
           cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
@@ -729,11 +714,13 @@ class CroppingPicture:
         p_list = list(picture_path.iterdir())
         img = cv2.imread(str(p_list[0]))
         if self.get_position_parameter() is None:
-          x_1, y_1, x_2, y_2 = self.select_position_parameter(picture, img)
+          positions = select_position_parameter(picture, img)
+          if positions is None:
+            continue
 
         for p in p_list:
           img = cv2.imread(str(p))
-          cropped = img[y_1:y_2, x_1:x_2]
+          cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
           cv2.imwrite(
             str(pathlib.Path(output_path / p.name)),
             cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
@@ -742,20 +729,16 @@ class CroppingPicture:
 
 def select_position_parameter(
   picture: str, img: numpy.array
-) -> Tuple[int, int, int, int]:
+) -> Optional[Tuple[int, int, int, int]]:
   """select(get) two positions for capring process using GUI window
 
   Args:
       picture (str): image name
       img (numpy.array): cv2 image object
 
-  Raises:
-      exception.GUIAbortPressedError: when 'abort' button is pressed
-
   Returns:
-      Tuple[int, int, int, int]: [x_1, y_1,x_2, y_2] two positions to crop image
+      Optional[Tuple[int, int, int, int]]: [x_1, y_1,x_2, y_2] two positions to crop image
   """
-
   w, h = img.shape[1], img.shape[0]
   add_texts_lower_left(
     img, ["s:save if selected", "c:clear", "click:select", "q/esc:abort"]
@@ -776,7 +759,7 @@ def select_position_parameter(
       if len(points) == 2:
         print("'s' is pressed. cropped positions are saved ({0})".format(points))
         cv2.destroyAllWindows()
-        return points[0] + points[1]
+        return (points[0][0], points[0][1], points[1][0], points[1][1])
       else:
         print("two positions for cropping are not selected yet")
         img_show = img.copy()
@@ -792,11 +775,13 @@ def select_position_parameter(
 
     elif k == ord("q"):
       cv2.destroyAllWindows()
-      raise exception.GUIAbortPressedError("'q' is pressed. abort")
+      print("'q' is pressed. abort")
+      return None
 
     elif k == 27:
       cv2.destroyAllWindows()
-      raise exception.GUIAbortPressedError("'Esq' is pressed. abort")
+      print("'Esq' is pressed. abort")
+      return None
 
 
 def mouse_on_select_position_parameter(event, x, y, flags, params):

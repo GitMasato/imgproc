@@ -13,7 +13,6 @@ import argparse
 import sys
 from typing import List
 from image_process import process
-from image_process import exception
 
 
 def call_check_arg(
@@ -33,17 +32,17 @@ def call_check_arg(
     value for key, value in args.__dict__.items() if key != "call" and key != "color"
   ]
   if not [item for item in items if item is not None]:
-    raise exception.ArgMissingError(parser.parse_args([arg_name, "--help"]))
+    sys.exit(parser.parse_args([arg_name, "--help"]))
 
   if hasattr(args, "movie") and hasattr(args, "picture"):
     if not args.movie and not args.picture:
-      raise exception.ArgMissingError("no movie and picture is given!")
+      sys.exit("no movie and picture is given!")
   elif hasattr(args, "movie"):
     if not args.movie:
-      raise exception.ArgMissingError("no movie is given!")
+      sys.exit("no movie is given!")
   elif hasattr(args, "picture"):
     if not args.picture:
-      raise exception.ArgMissingError("no picture is given!")
+      sys.exit("no picture is given!")
 
 
 def call_animate(
