@@ -112,6 +112,11 @@ def get_output_path(target_list: List[str], output: str) -> List[pathlib.Path]:
 
   for target in target_list:
     target_path = pathlib.Path(target).resolve()
+
+    if not target_path.is_dir() and not target_path.is_file():
+      print("'{0}' does not exist!".format(str(target_path)))
+      continue
+
     layers = target_path.parts
     if "cv2" in layers:
       p_path = target_path.parents[1] if target_path.is_file() else target_path.parent
@@ -278,7 +283,7 @@ class BinarizingMovie:
       ret, frame = cap.read()
       gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
       if self.get_threshold_parameter() is None:
-        thresholds = self.select_threshold_parameter(movie, gray)
+        thresholds = select_threshold_parameter(movie, gray)
         if thresholds is None:
           continue
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
@@ -342,7 +347,7 @@ class BinarizingPicture:
         img = cv2.imread(picture)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self.get_threshold_parameter() is None:
-          thresholds = self.select_threshold_parameter(picture, gray)
+          thresholds = select_threshold_parameter(picture, gray)
           if thresholds is None:
             continue
         ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
@@ -356,7 +361,7 @@ class BinarizingPicture:
         img = cv2.imread(str(p_list[0]))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         if self.get_threshold_parameter() is None:
-          thresholds = self.select_threshold_parameter(picture, gray)
+          thresholds = select_threshold_parameter(picture, gray)
           if thresholds is None:
             continue
 
@@ -383,6 +388,8 @@ def select_threshold_parameter(
   cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
   cv2.createTrackbar("low", picture, 0, 255, no)
   cv2.createTrackbar("high", picture, 255, 255, no)
+  print("--- binarize ---")
+  print("select threshold in GUI window! (s: save if selected, q/esc: abort)")
 
   while True:
 
@@ -516,6 +523,8 @@ class CapturingMovie:
     cv2.createTrackbar("start cap\n", movie, 0, 1, no)
     cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
     cv2.createTrackbar("step 10ms\n", movie, 1, 100, no)
+    print("--- capture ---")
+    print("select time parameters in GUI window! (s: save if selected, q/esc: abort)")
 
     while True:
 
@@ -750,6 +759,9 @@ def select_position_parameter(
     picture, mouse_on_select_position_parameter, [picture, img, w, h, points]
   )
   cv2.imshow(picture, img)
+  print("--- crop ---")
+  print("select positions in GUI window!")
+  print("(s: save if selected, c: clear, click: select, q/esc: abort)")
 
   while True:
 
@@ -862,20 +874,20 @@ class CreatingLuminanceHistgramPicture:
         print("creating luminance histgram of picture '{0}'...".format(picture))
 
         if self.is_colored():
-          self.create_color_figure(picture_path)
+          self.create_color_figure(picture_path, output_path)
         else:
-          self.create_gray_figure(picture_path)
+          self.create_gray_figure(picture_path, output_path)
 
       elif picture_path.is_dir():
 
-        print("resizing picture in '{0}'...".format(picture))
+        print("creating luminance histgram of picture in '{0}'...".format(picture))
 
         if self.is_colored():
           for p in list(picture_path.iterdir()):
-            self.create_color_figure(p)
+            self.create_color_figure(p, output_path)
         else:
           for p in list(picture_path.iterdir()):
-            self.create_gray_figure(p)
+            self.create_gray_figure(p, output_path)
 
   def create_color_figure(self, picture_path: pathlib.Path, output_path: pathlib.Path):
     """create output figure in color
@@ -897,6 +909,7 @@ class CreatingLuminanceHistgramPicture:
     subplot = fig.add_subplot(2, 2, 4)
     subplot.hist(rgb[:, :, 2].flatten(), bins=numpy.arange(256 + 1), color="b")
     fig.savefig(str(pathlib.Path(output_path / picture_path.name)))
+    pyplot.close(fig)
 
   def create_gray_figure(self, picture_path: pathlib.Path, output_path: pathlib.Path):
     """create output figure in gray
@@ -914,6 +927,7 @@ class CreatingLuminanceHistgramPicture:
     subplot = fig.add_subplot(1, 2, 2)
     subplot.hist(gray.flatten(), bins=numpy.arange(256 + 1))
     fig.savefig(str(pathlib.Path(output_path / picture_path.name)))
+    pyplot.close(fig)
 
 
 class ResizingMovie:
