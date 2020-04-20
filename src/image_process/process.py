@@ -189,12 +189,16 @@ class AnimatingPicture:
 
   def execute(self):
     """animating process to create movie
+
+    Returns:
+        List[str]: list of output (movie) path names
     """
     output_path_list = get_output_path(self.get_picture_list(), "animated")
     clean_output_directory(output_path_list)
     fps = 20.0 if self.get_fps() is None else self.get_fps()  # 20.0 is default
     is_first_unprocessed = True
     unprocessed_pictures: List[pathlib.Path] = []
+    return_list: List[str] = []
 
     for picture, output_path in zip(self.get_picture_list(), output_path_list):
 
@@ -208,6 +212,7 @@ class AnimatingPicture:
           img = cv2.imread(str(picture_path))
           unprocessed_size = (int(img.shape[1]), int(img.shape[0]))
           unprocessed_name = str(pathlib.Path(output_path / picture_path.stem)) + ".mp4"
+          return_list.append(unprocessed_name)
           is_first_unprocessed = False
 
       elif picture_path.is_dir():
@@ -217,6 +222,7 @@ class AnimatingPicture:
         img = cv2.imread(str(p_list[0]))
         size = (int(img.shape[1]), int(img.shape[0]))
         output_name = str(pathlib.Path(output_path / picture_path.name)) + ".mp4"
+        return_list.append(output_name)
         fourcc = cv2.VideoWriter_fourcc(*"mp4v")
         output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
 
@@ -239,6 +245,8 @@ class AnimatingPicture:
         unprocessed_output.write(
           img if self.is_colored() else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
         )
+
+    return return_list
 
 
 class BinarizingMovie:
@@ -265,6 +273,9 @@ class BinarizingMovie:
 
   def execute(self):
     """binarizing process
+
+    Returns:
+        List[str]: list of output (movie) path names
     """
     if self.get_threshold_parameter() is not None:
       thresholds = self.get_threshold_parameter()
@@ -274,6 +285,7 @@ class BinarizingMovie:
 
     output_path_list = get_output_path(self.get_movie_list(), "binarized")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for movie, output_path in zip(self.get_movie_list(), output_path_list):
 
@@ -286,8 +298,10 @@ class BinarizingMovie:
         thresholds = select_threshold_parameter(movie, gray)
         if thresholds is None:
           continue
+
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
+      return_list.append(output_name)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, (int(W), int(H)), False)
 
@@ -299,6 +313,8 @@ class BinarizingMovie:
         ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
         ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
         output.write(bin_2)
+
+    return return_list
 
 
 class BinarizingPicture:
@@ -327,6 +343,9 @@ class BinarizingPicture:
 
   def execute(self):
     """binarizing process
+
+    Returns:
+        List[str]: list of output (picture or directory) path names
     """
     if self.get_threshold_parameter() is not None:
       thresholds = self.get_threshold_parameter()
@@ -336,6 +355,7 @@ class BinarizingPicture:
 
     output_path_list = get_output_path(self.get_picture_list(), "binarized")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for picture, output_path in zip(self.get_picture_list(), output_path_list):
 
@@ -350,9 +370,12 @@ class BinarizingPicture:
           thresholds = select_threshold_parameter(picture, gray)
           if thresholds is None:
             continue
+
         ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
         ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
-        cv2.imwrite(str(pathlib.Path(output_path / picture_path.name)), bin_2)
+        name = str(pathlib.Path(output_path / picture_path.name))
+        return_list.append(name)
+        cv2.imwrite(name, bin_2)
 
       elif picture_path.is_dir():
 
@@ -365,12 +388,16 @@ class BinarizingPicture:
           if thresholds is None:
             continue
 
+        return_list.append(str(output_path))
+
         for p in p_list:
           img = cv2.imread(str(p))
           gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
           ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
           ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
           cv2.imwrite(str(pathlib.Path(output_path / p.name)), bin_2)
+
+    return return_list
 
 
 def select_threshold_parameter(
@@ -455,7 +482,11 @@ class CapturingMovie:
     return self.__time_parameter
 
   def execute(self):
-    """capturing process"""
+    """capturing process
+
+    Returns:
+        List[str]: list of output (directory) path names
+    """
     if self.get_time_parameter() is not None:
       time_parameter = self.get_time_parameter()
 
@@ -471,6 +502,7 @@ class CapturingMovie:
 
     output_path_list = get_output_path(self.get_movie_list(), "captured")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for movie, output_path in zip(self.get_movie_list(), output_path_list):
 
@@ -481,19 +513,23 @@ class CapturingMovie:
         time_parameter = self.select_time_parameter(movie, frames, fps, cap)
         if time_parameter is None:
           continue
+
       capture_time = time_parameter[0]
+      return_list.append(str(output_path))
 
       while capture_time <= time_parameter[1]:
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, round(capture_time * fps))
         ret, frame = cap.read()
         cv2.imwrite(
-          "{0}/{1:08}_ms.jpg".format(
+          "{0}/{1:08}_ms.png".format(
             str(output_path), int(round(capture_time - time_parameter[0], 3) * 1000)
           ),
           frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
         capture_time += time_parameter[2]
+
+    return return_list
 
   def select_time_parameter(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
@@ -620,6 +656,9 @@ class CroppingMovie:
 
   def execute(self):
     """capturing process
+
+    Returns:
+        List[str]: list of output (movie) path names
     """
     if self.get_position_parameter() is not None:
       positions = self.get_position_parameter()
@@ -629,6 +668,7 @@ class CroppingMovie:
 
     output_path_list = get_output_path(self.get_movie_list(), "cropped")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for movie, output_path in zip(self.get_movie_list(), output_path_list):
 
@@ -644,6 +684,7 @@ class CroppingMovie:
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(positions[2] - positions[0]), int(positions[3] - positions[1]))
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
+      return_list.append(output_name)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
 
@@ -655,6 +696,8 @@ class CroppingMovie:
         output.write(
           cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
         )
+
+    return return_list
 
 
 class CroppingPicture:
@@ -688,6 +731,9 @@ class CroppingPicture:
 
   def execute(self):
     """cropping process
+
+    Returns:
+        List[str]: list of output (picture or directory) path names
     """
     if self.get_position_parameter() is not None:
       positions = self.get_position_parameter()
@@ -697,6 +743,7 @@ class CroppingPicture:
 
     output_path_list = get_output_path(self.get_picture_list(), "cropped")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for picture, output_path in zip(self.get_picture_list(), output_path_list):
 
@@ -712,8 +759,10 @@ class CroppingPicture:
             continue
 
         cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
+        name = str(pathlib.Path(output_path / picture_path.name))
+        return_list.append(name)
         cv2.imwrite(
-          str(pathlib.Path(output_path / picture_path.name)),
+          name,
           cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
         )
 
@@ -722,10 +771,13 @@ class CroppingPicture:
         print("cropping picture in '{0}'...".format(picture))
         p_list = list(picture_path.iterdir())
         img = cv2.imread(str(p_list[0]))
+
         if self.get_position_parameter() is None:
           positions = select_position_parameter(picture, img)
           if positions is None:
             continue
+
+        return_list.append(str(output_path))
 
         for p in p_list:
           img = cv2.imread(str(p))
@@ -734,6 +786,8 @@ class CroppingPicture:
             str(pathlib.Path(output_path / p.name)),
             cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
           )
+
+    return return_list
 
 
 def select_position_parameter(
@@ -861,9 +915,13 @@ class CreatingLuminanceHistgramPicture:
 
   def execute(self):
     """creating luminance histglam
+
+    Returns:
+        List[str]: list of output (picture or directory) path names
     """
     output_path_list = get_output_path(self.get_picture_list(), "histgram_luminance")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     for picture, output_path in zip(self.get_picture_list(), output_path_list):
 
@@ -872,6 +930,7 @@ class CreatingLuminanceHistgramPicture:
       if picture_path.is_file():
 
         print("creating luminance histgram of picture '{0}'...".format(picture))
+        return_list.append(str(pathlib.Path(output_path / picture_path.name)))
 
         if self.is_colored():
           self.create_color_figure(picture_path, output_path)
@@ -881,6 +940,7 @@ class CreatingLuminanceHistgramPicture:
       elif picture_path.is_dir():
 
         print("creating luminance histgram of picture in '{0}'...".format(picture))
+        return_list.append(str(output_path))
 
         if self.is_colored():
           for p in list(picture_path.iterdir()):
@@ -888,6 +948,8 @@ class CreatingLuminanceHistgramPicture:
         else:
           for p in list(picture_path.iterdir()):
             self.create_gray_figure(p, output_path)
+
+    return return_list
 
   def create_color_figure(self, picture_path: pathlib.Path, output_path: pathlib.Path):
     """create output figure in color
@@ -961,9 +1023,13 @@ class ResizingMovie:
 
   def execute(self):
     """resizing process
+
+    Returns:
+        List[str]: list of output (movie) path names
     """
     output_path_list = get_output_path(self.get_movie_list(), "resized")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     if self.get_scale_parameter() is not None:
       scale_x, scale_y = self.get_scale_parameter()
@@ -977,6 +1043,7 @@ class ResizingMovie:
       W, H, frames, fps = get_movie_info(cap)
       size = (int(W * scale_x), int(H * scale_y))
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
+      return_list.append(output_name)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
 
@@ -988,6 +1055,8 @@ class ResizingMovie:
         output.write(
           resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         )
+
+    return return_list
 
 
 class ResizingPicture:
@@ -1021,9 +1090,13 @@ class ResizingPicture:
 
   def execute(self):
     """resizing process
+
+    Returns:
+        List[str]: list of output (picture or directory) path names
     """
     output_path_list = get_output_path(self.get_picture_list(), "resized")
     clean_output_directory(output_path_list)
+    return_list: List[str] = []
 
     if self.get_scale_parameter() is not None:
       scale_x, scale_y = self.get_scale_parameter()
@@ -1040,14 +1113,17 @@ class ResizingPicture:
         img = cv2.imread(picture)
         W, H = img.shape[1], img.shape[0]
         resized = cv2.resize(img, dsize=(int(W * scale_x), int(H * scale_y)))
+        name = str(pathlib.Path(output_path / picture_path.name))
+        return_list.append(name)
         cv2.imwrite(
-          str(pathlib.Path(output_path / picture_path.name)),
+          name,
           resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
         )
 
       elif picture_path.is_dir():
 
         print("resizing picture in '{0}'...".format(picture))
+        return_list.append(str(output_path))
 
         for p in list(picture_path.iterdir()):
           img = cv2.imread(str(p))
@@ -1057,6 +1133,8 @@ class ResizingPicture:
             str(pathlib.Path(output_path / p.name)),
             resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
           )
+
+    return return_list
 
 
 class RotatingMovie:
@@ -1091,12 +1169,16 @@ class RotatingMovie:
 
   def execute(self):
     """rotating process
+
+    Returns:
+        List[str]: list of output (movie) path names
     """
     output_path_list = get_output_path(self.get_movie_list(), "rotated")
     clean_output_directory(output_path_list)
     degree = 0.0 if self.get_degree() is None else self.get_degree()
     rad = degree / 180.0 * numpy.pi
     sin_rad, cos_rad = numpy.absolute(numpy.sin(rad)), numpy.absolute(numpy.cos(rad))
+    return_list: List[str] = []
 
     for movie, output_path in zip(self.get_movie_list(), output_path_list):
 
@@ -1114,6 +1196,7 @@ class RotatingMovie:
       affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
+      return_list.append(output_name)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size_rot, self.is_colored())
 
@@ -1125,6 +1208,8 @@ class RotatingMovie:
         output.write(
           rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
         )
+
+    return return_list
 
 
 class RotatingPicture:
@@ -1158,12 +1243,16 @@ class RotatingPicture:
 
   def execute(self):
     """rotating process
+
+    Returns:
+        List[str]: list of output (picture or directory) path names
     """
     output_path_list = get_output_path(self.get_picture_list(), "rotated")
     clean_output_directory(output_path_list)
     degree = 0.0 if self.get_degree() is None else self.get_degree()
     rad = degree / 180.0 * numpy.pi
     sin_rad, cos_rad = numpy.absolute(numpy.sin(rad)), numpy.absolute(numpy.cos(rad))
+    return_list: List[str] = []
 
     for picture, output_path in zip(self.get_picture_list(), output_path_list):
 
@@ -1174,14 +1263,17 @@ class RotatingPicture:
         print("rotating picture '{0}'...".format(picture))
         img = cv2.imread(picture)
         rotated = self.get_rotated_image(img, degree, sin_rad, cos_rad)
+        name = str(pathlib.Path(output_path / picture_path.name))
+        return_list.append(name)
         cv2.imwrite(
-          str(pathlib.Path(output_path / picture_path.name)),
+          name,
           rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
         )
 
       elif picture_path.is_dir():
 
         print("rotating picture in '{0}'...".format(picture))
+        return_list.append(str(output_path))
 
         for p in list(picture_path.iterdir()):
           img = cv2.imread(str(p))
@@ -1190,6 +1282,8 @@ class RotatingPicture:
             str(pathlib.Path(output_path / p.name)),
             rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
           )
+
+    return return_list
 
   def get_rotated_image(
     self, img: numpy.array, degree: float, sin_rad: float, cos_rad: float
@@ -1217,11 +1311,43 @@ class RotatingPicture:
     return cv2.warpAffine(img, affine_matrix, size_rot, flags=cv2.INTER_CUBIC)
 
 
-def process(processes: List[ABCProcess]):
-  """execute image process
+class ABCProcessExecution(Protocol):
+  """abstract base class for executing ABCProcess object/objects"""
 
-  Args:
-      processes (List[ABCProcess]): list of sub-classes of ABCProcess class
-  """
-  for process in processes:
-    process.execute()
+  def execute(self):
+    pass
+
+
+class ProcessExecution:
+  """class for executing ABCProcess object"""
+
+  def __init__(self, process: ABCProcess):
+    """constructor
+
+    Args:
+        process (ABCProcess): image-process object
+    """
+    self.__process = process
+
+  def execute(self):
+    """executing image-process
+    """
+    self.__process.execute()
+
+
+class ProcessesExecution:
+  """class for executing ABCProcess objects"""
+
+  def __init__(self, processes: List[ABCProcess]):
+    """constructor
+
+    Args:
+        process (List[ABCProcess]): list of image-process objects
+    """
+    self.__processes = processes
+
+  def execute(self):
+    """executing image-process
+    """
+    for process in self.__processes:
+      process.execute()

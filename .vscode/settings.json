@@ -1,3 +1,21 @@
 {
-  "python.pythonPath": ".venv/bin/python"
+  "python.pythonPath": ".venv/bin/python",
+  "python.venvPath": ".venv",
+  "python.terminal.activateEnvironment": true,
+  "python.terminal.activateEnvInCurrentTerminal": true,
+  "python.formatting.provider": "black",
+  "python.formatting.blackPath": "cblack",
+  "python.formatting.blackArgs": [
+    "--line-length",
+    "88",
+  ],
+  "python.linting.enabled": true,
+  "python.linting.pylintEnabled": false,
+  "python.linting.pylintUseMinimalCheckers": false,
+  "python.linting.mypyEnabled": true,
+  "python.linting.flake8Enabled": true,
+  "python.linting.flake8Args": [
+    "--max-line-length=88",
+    "--ignore=E111,E114,E121,E203,E265,E501,W503,W504,W605",
+  ],
 }

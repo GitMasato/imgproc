@@ -47,7 +47,7 @@ def call_check_arg(
 
 def call_animate(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when animate command is given
 
   Args:
@@ -55,18 +55,17 @@ def call_animate(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("animate", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(process.AnimatingPicture(args.picture, args.color, args.fps))
-  return p
+  return process.ProcessExecution(
+    process.AnimatingPicture(args.picture, args.color, args.fps)
+  )
 
 
 def call_binarize(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when binarize command is given
 
   Args:
@@ -74,7 +73,7 @@ def call_binarize(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("binarize", args, parser)
   p: List[process.ABCProcess] = []
@@ -82,12 +81,12 @@ def call_binarize(
     p.append(process.BinarizingPicture(args.picture, args.threshold))
   if args.movie:
     p.append(process.BinarizingMovie(args.movie, args.threshold))
-  return p
+  return process.ProcessesExecution(p)
 
 
 def call_capture(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when capture command is given
 
   Args:
@@ -95,18 +94,17 @@ def call_capture(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("capture", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.movie:
-    p.append(process.CapturingMovie(args.movie, args.color, args.time))
-  return p
+  return process.ProcessExecution(
+    process.CapturingMovie(args.movie, args.color, args.time)
+  )
 
 
 def call_crop(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when crop command is given
 
   Args:
@@ -114,7 +112,7 @@ def call_crop(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("crop", args, parser)
   p: List[process.ABCProcess] = []
@@ -122,12 +120,12 @@ def call_crop(
     p.append(process.CroppingPicture(args.picture, args.color, args.position))
   if args.movie:
     p.append(process.CroppingMovie(args.movie, args.color, args.position))
-  return p
+  return process.ProcessesExecution(p)
 
 
 def call_hist_luminance(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when hist_luminance command is given
 
   Args:
@@ -135,18 +133,17 @@ def call_hist_luminance(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("hist-luminance", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(process.CreatingLuminanceHistgramPicture(args.picture, args.color))
-  return p
+  return process.ProcessExecution(
+    process.CreatingLuminanceHistgramPicture(args.picture, args.color)
+  )
 
 
 def call_resize(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when resize command is given
 
   Args:
@@ -154,7 +151,7 @@ def call_resize(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("resize", args, parser)
   p: List[process.ABCProcess] = []
@@ -162,12 +159,12 @@ def call_resize(
     p.append(process.ResizingPicture(args.picture, args.color, args.scale))
   if args.movie:
     p.append(process.ResizingMovie(args.movie, args.color, args.scale))
-  return p
+  return process.ProcessesExecution(p)
 
 
 def call_rotate(
   args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> List[process.ABCProcess]:
+) -> process.ABCProcessExecution:
   """call function when rotate command is given
 
   Args:
@@ -175,7 +172,7 @@ def call_rotate(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABSProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("rotate", args, parser)
   p: List[process.ABCProcess] = []
@@ -183,14 +180,14 @@ def call_rotate(
     p.append(process.RotatingPicture(args.picture, args.color, args.degree))
   if args.movie:
     p.append(process.RotatingMovie(args.movie, args.color, args.degree))
-  return p
+  return process.ProcessesExecution(p)
 
 
-def read_cli_argument() -> List[process.ABCProcess]:
+def read_cli_argument() -> process.ABCProcessExecution:
   """read and parse cli arguments
 
   Returns:
-      List[process.ABCProcess]: list of sub-class of ABCProcess class
+      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   parser = argparse.ArgumentParser(
     prog="image_process.py",
@@ -370,7 +367,8 @@ def read_cli_argument() -> List[process.ABCProcess]:
 def main() -> None:
   """cli command main function
   """
-  process.process(read_cli_argument())
+  image_process = read_cli_argument()
+  image_process.execute()
 
 
 if __name__ == "__main__":

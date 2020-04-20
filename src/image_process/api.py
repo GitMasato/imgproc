@@ -9,8 +9,8 @@ If directory path where pictures are stored is given as picture argument, same i
 see usage of each api function below;
 
 """
+import sys
 from typing import List, Tuple
-from image_process import exception
 from image_process import process
 
 
@@ -21,17 +21,14 @@ def animate(*, picture: List[str] = None, is_colored: bool = False, fps: float =
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       fps (float, optional): fps of created movie. Defaults to 20.0.
-
-  Raises:
-      exception.ArgMissingError: when no picture is given
   """
   if not picture:
-    raise exception.ArgMissingError("no picture is given!")
+    sys.exit("no picture is given!")
 
-  process_list: List[process.ABCProcess] = []
-  if picture:
-    process_list.append(process.AnimatingPicture(picture, is_colored, fps))
-  process.process(process_list)
+  image_process = process.ProcessExecution(
+    process.AnimatingPicture(picture, is_colored, fps)
+  )
+  image_process.execute()
 
 
 def binarize(
@@ -46,19 +43,17 @@ def binarize(
       movie (List[str], optional): list of movie-file paths. Defaults to None.
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       threshold (Tuple[int, int], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. Defaults to None. If this variable is None, this will be selected using GUI window
-
-  Raises:
-      exception.ArgMissingError: when no picture adn movie is given
   """
   if not movie and not picture:
-    raise exception.ArgMissingError("no movie and picture is given!")
+    sys.exit("no movie and picture is given!")
 
-  process_list: List[process.ABCProcess] = []
+  p: List[process.ABCProcess] = []
   if movie:
-    process_list.append(process.BinarizingPicture(movie, threshold))
+    p.append(process.BinarizingPicture(movie, threshold))
   if picture:
-    process_list.append(process.BinarizingPicture(picture, threshold))
-  process.process(process_list)
+    p.append(process.BinarizingPicture(picture, threshold))
+  image_process = process.ProcessesExecution(p)
+  image_process.execute()
 
 
 def capture(
@@ -73,17 +68,14 @@ def capture(
       movie (List[str], optional): list of movie-file paths. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       time (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). Start must be smaller than stop, and difference between start and stop must be larger than step. Defaults to None. If this variable is None, this will be selected using GUI window
-
-  Raises:
-      exception.ArgMissingError: when no movie is given
   """
   if not movie:
-    raise exception.ArgMissingError("no movie is given!")
+    sys.exit("no movie is given!")
 
-  process_list: List[process.ABCProcess] = []
-  if movie:
-    process_list.append(process.CapturingMovie(movie, is_colored, time))
-  process.process(process_list)
+  image_process = process.ProcessExecution(
+    process.CapturingMovie(movie, is_colored, time)
+  )
+  image_process.execute()
 
 
 def crop(
@@ -100,19 +92,17 @@ def crop(
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       postision (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
-
-  Raises:
-      exception.ArgMissingError: when no picture and movie is given
   """
   if not movie and not picture:
-    raise exception.ArgMissingError("no movie and picture is given!")
+    sys.exit("no movie and picture is given!")
 
-  process_list: List[process.ABCProcess] = []
+  p: List[process.ABCProcess] = []
   if movie:
-    process_list.append(process.CroppingMovie(movie, is_colored, postision))
+    p.append(process.CroppingMovie(movie, is_colored, postision))
   if picture:
-    process_list.append(process.CroppingPicture(picture, is_colored, postision))
-  process.process(process_list)
+    p.append(process.CroppingPicture(picture, is_colored, postision))
+  image_process = process.ProcessesExecution(p)
+  image_process.execute()
 
 
 def hist_luminance(
@@ -123,17 +113,14 @@ def hist_luminance(
   Args:
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-
-  Raises:
-      exception.ArgMissingError: when no picture is given
   """
   if not picture:
-    raise exception.ArgMissingError("no picture is given!")
+    sys.exit("no picture is given!")
 
-  process_list: List[process.ABCProcess] = []
-  if picture:
-    process_list.append(process.CreatingLuminanceHistgramPicture(picture, is_colored))
-  process.process(process_list)
+  image_process = process.ProcessExecution(
+    process.CreatingLuminanceHistgramPicture(picture, is_colored)
+  )
+  image_process.execute()
 
 
 def resize(
@@ -150,19 +137,17 @@ def resize(
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       scale (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to (1.0,1.0).
-
-  Raises:
-      exception.ArgMissingError: when no picture and movie is given
   """
   if not movie and not picture:
-    raise exception.ArgMissingError("no movie and picture is given!")
+    sys.exit("no movie and picture is given!")
 
-  process_list: List[process.ABCProcess] = []
+  p: List[process.ABCProcess] = []
   if movie:
-    process_list.append(process.ResizingMovie(movie, is_colored, scale))
+    p.append(process.ResizingMovie(movie, is_colored, scale))
   if picture:
-    process_list.append(process.ResizingPicture(picture, is_colored, scale))
-  process.process(process_list)
+    p.append(process.ResizingPicture(picture, is_colored, scale))
+  image_process = process.ProcessesExecution(p)
+  image_process.execute()
 
 
 def rotate(
@@ -179,16 +164,14 @@ def rotate(
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       degree (float, optional): degree of rotation. Defaults to 0.0.
-
-  Raises:
-      exception.ArgMissingError: when no picture and movie is given
   """
   if not movie and not picture:
-    raise exception.ArgMissingError("no movie and picture is given!")
+    sys.exit("no movie and picture is given!")
 
-  process_list: List[process.ABCProcess] = []
+  p: List[process.ABCProcess] = []
   if movie:
-    process_list.append(process.RotatingMovie(movie, is_colored, degree))
+    p.append(process.RotatingMovie(movie, is_colored, degree))
   if picture:
-    process_list.append(process.RotatingPicture(picture, is_colored, degree))
-  process.process(process_list)
+    p.append(process.RotatingPicture(picture, is_colored, degree))
+  image_process = process.ProcessesExecution(p)
+  image_process.execute()
