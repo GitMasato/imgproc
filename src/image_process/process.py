@@ -5,7 +5,7 @@ import numpy
 import pathlib
 import shutil
 from matplotlib import pyplot
-from typing import List, Optional, Protocol, Tuple
+from typing import List, NamedTuple, Optional, Protocol, Tuple
 
 
 def add_texts(image: numpy.array, texts: List[str], position: Tuple[int, int]):
@@ -157,35 +157,36 @@ class ABCProcess(Protocol):
     pass
 
 
+class AnimatingParameter(NamedTuple):
+  """Animating process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): whether to output in color. Defaults to False.
+      fps (Optional[float], optional): fps of created movie. Defaults to 20.0.
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+  fps: Optional[float] = 20.0
+
+
 class AnimatingPicture:
   """class to create animation (movie) from pictures"""
 
   def __init__(
-    self,
-    picture_list: List[str],
-    is_colored: bool = False,
-    fps: Optional[float] = 20.0,
+    self, parameter: AnimatingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of picture_list or directories where pictures are stored
-        is_colored (bool, optional): whether to output in color. Defaults to False.
-        fps (Optional[float], optional): fps of created movie. Defaults to 20.0.
-
-    """
-    self.__picture_list = picture_list
-    self.__is_colored = is_colored
-    self.__fps = fps
-
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
   def get_fps(self) -> Optional[float]:
-    return self.__fps
+    return self.__parameter.fps
 
   def execute(self):
     """animating process to create movie
@@ -193,14 +194,14 @@ class AnimatingPicture:
     Returns:
         List[str]: list of output (movie) path names
     """
-    output_path_list = get_output_path(self.get_picture_list(), "animated")
+    output_path_list = get_output_path(self.get_target_list(), "animated")
     clean_output_directory(output_path_list)
     fps = 20.0 if self.get_fps() is None else self.get_fps()  # 20.0 is default
     is_first_unprocessed = True
     unprocessed_pictures: List[pathlib.Path] = []
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -249,27 +250,32 @@ class AnimatingPicture:
     return return_list
 
 
+class BinarizingParameter(NamedTuple):
+  """Binarizing process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      thresholds (Optional[Tuple[int, int]], optional): [low, high] threshold values to be used to binarize movie. Defaults to None. If this variable is None, this will be selected using GUI window
+  """
+
+  target_list: List[str]
+  thresholds: Optional[Tuple[int, int]] = None
+
+
 class BinarizingMovie:
   """class to binarize movie
   """
 
   def __init__(
-    self, movie_list: List[str], threshold_parameter: Optional[Tuple[int, int]] = None,
+    self, parameter: BinarizingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        movie_list (List[str]): list of movies
-        threshold_parameter (Optional[Tuple[int, int]], optional): [low, high] threshold values to be used to binarize movie. Defaults to None. If this variable is None, this will be selected using GUI window
-    """
-    self.__movie_list = movie_list
-    self.__threshold_parameter = threshold_parameter
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
-  def get_movie_list(self) -> List[str]:
-    return self.__movie_list
-
-  def get_threshold_parameter(self) -> Optional[Tuple[int, int]]:
-    return self.__threshold_parameter
+  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+    return self.__parameter.thresholds
 
   def execute(self):
     """binarizing process
@@ -277,25 +283,25 @@ class BinarizingMovie:
     Returns:
         List[str]: list of output (movie) path names
     """
-    if self.get_threshold_parameter() is not None:
-      thresholds = self.get_threshold_parameter()
+    if self.get_thresholds() is not None:
+      thresholds = self.get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
         return
 
-    output_path_list = get_output_path(self.get_movie_list(), "binarized")
+    output_path_list = get_output_path(self.get_target_list(), "binarized")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
       print("binarizing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       ret, frame = cap.read()
       gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-      if self.get_threshold_parameter() is None:
-        thresholds = select_threshold_parameter(movie, gray)
+      if self.get_thresholds() is None:
+        thresholds = select_thresholds(movie, gray)
         if thresholds is None:
           continue
 
@@ -322,24 +328,15 @@ class BinarizingPicture:
   """
 
   def __init__(
-    self,
-    picture_list: List[str],
-    threshold_parameter: Optional[Tuple[int, int]] = None,
+    self, parameter: BinarizingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of pictures or directories where pictures are
-        stored threshold_parameter (Optional[Tuple[int, int]], optional): [low, high]threshold values to be used to binarize picture. Defaults to None. If this variable is None, this will be selected using GUI window
-    """
-    self.__picture_list = picture_list
-    self.__threshold_parameter = threshold_parameter
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
-
-  def get_threshold_parameter(self) -> Optional[Tuple[int, int]]:
-    return self.__threshold_parameter
+  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+    return self.__parameter.thresholds
 
   def execute(self):
     """binarizing process
@@ -347,17 +344,17 @@ class BinarizingPicture:
     Returns:
         List[str]: list of output (picture or directory) path names
     """
-    if self.get_threshold_parameter() is not None:
-      thresholds = self.get_threshold_parameter()
+    if self.get_thresholds() is not None:
+      thresholds = self.get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
         return
 
-    output_path_list = get_output_path(self.get_picture_list(), "binarized")
+    output_path_list = get_output_path(self.get_target_list(), "binarized")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -366,8 +363,8 @@ class BinarizingPicture:
         print("binarizing picture '{0}'...".format(picture))
         img = cv2.imread(picture)
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if self.get_threshold_parameter() is None:
-          thresholds = select_threshold_parameter(picture, gray)
+        if self.get_thresholds() is None:
+          thresholds = select_thresholds(picture, gray)
           if thresholds is None:
             continue
 
@@ -383,8 +380,8 @@ class BinarizingPicture:
         p_list = list(picture_path.iterdir())
         img = cv2.imread(str(p_list[0]))
         gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if self.get_threshold_parameter() is None:
-          thresholds = select_threshold_parameter(picture, gray)
+        if self.get_thresholds() is None:
+          thresholds = select_thresholds(picture, gray)
           if thresholds is None:
             continue
 
@@ -400,9 +397,7 @@ class BinarizingPicture:
     return return_list
 
 
-def select_threshold_parameter(
-  picture: str, img: numpy.array
-) -> Optional[Tuple[int, int]]:
+def select_thresholds(picture: str, img: numpy.array) -> Optional[Tuple[int, int]]:
   """select(get) threshold values for binarization using GUI window
 
   Args:
@@ -452,34 +447,36 @@ def select_threshold_parameter(
       return None
 
 
+class CapturingParameter(NamedTuple):
+  """Capturing process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      times (Optional[Tuple[float, float, float]], optional): [start, stop, step] parameters for capturing movie (s). Defaults to None. If this variable is None, this will be selected using GUI window
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+  times: Optional[Tuple[float, float, float]] = None
+
+
 class CapturingMovie:
   """class to capture movie"""
 
   def __init__(
-    self,
-    movie_list: List[str],
-    is_colored: bool = False,
-    time_parameter: Optional[Tuple[float, float, float]] = None,
+    self, parameter: CapturingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        movie_list (List[str]): list of movies
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        time_parameter (Optional[Tuple[float, float, float]], optional): [start, stop, step] parameters for capturing movie (s). Defaults to None. If this variable is None, this will be selected using GUI window
-    """
-    self.__movie_list = movie_list
-    self.__is_colored = is_colored
-    self.__time_parameter = time_parameter
-
-  def get_movie_list(self) -> List[str]:
-    return self.__movie_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
-  def get_time_parameter(self) -> Optional[Tuple[float, float, float]]:
-    return self.__time_parameter
+  def get_times(self) -> Optional[Tuple[float, float, float]]:
+    return self.__parameter.times
 
   def execute(self):
     """capturing process
@@ -487,51 +484,51 @@ class CapturingMovie:
     Returns:
         List[str]: list of output (directory) path names
     """
-    if self.get_time_parameter() is not None:
-      time_parameter = self.get_time_parameter()
+    if self.get_times() is not None:
+      time = self.get_times()
 
-      if time_parameter[1] - time_parameter[0] <= time_parameter[2]:
+      if time[1] - time[0] <= time[2]:
         print("difference between stop and start must be > time step")
         return
-      if time_parameter[1] <= time_parameter[0]:
+      if time[1] <= time[0]:
         print("stop must be > start")
         return
-      if time_parameter[2] < 0.001:
+      if time[2] < 0.001:
         print("time step must be > 0")
         return
 
-    output_path_list = get_output_path(self.get_movie_list(), "captured")
+    output_path_list = get_output_path(self.get_target_list(), "captured")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
       print("capturing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
-      if self.get_time_parameter() is None:
-        time_parameter = self.select_time_parameter(movie, frames, fps, cap)
-        if time_parameter is None:
+      if self.get_times() is None:
+        time = self.select_times(movie, frames, fps, cap)
+        if time is None:
           continue
 
-      capture_time = time_parameter[0]
+      capture_time = time[0]
       return_list.append(str(output_path))
 
-      while capture_time <= time_parameter[1]:
+      while capture_time <= time[1]:
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, round(capture_time * fps))
         ret, frame = cap.read()
         cv2.imwrite(
           "{0}/{1:08}_ms.png".format(
-            str(output_path), int(round(capture_time - time_parameter[0], 3) * 1000)
+            str(output_path), int(round(capture_time - time[0], 3) * 1000)
           ),
           frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
         )
-        capture_time += time_parameter[2]
+        capture_time += time[2]
 
     return return_list
 
-  def select_time_parameter(
+  def select_times(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[Tuple[float, float, float]]:
     """select(get) parametes for capture using GUI window
@@ -625,34 +622,36 @@ class CapturingMovie:
         return None
 
 
+class CroppingParameter(NamedTuple):
+  """Cropping process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. Defaults to None. If this variable is None, this will be selected using GUI window
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+  positions: Optional[Tuple[int, int, int, int]] = None
+
+
 class CroppingMovie:
   """class to crop movie"""
 
   def __init__(
-    self,
-    movie_list: List[str],
-    is_colored: bool = False,
-    position_parameter: Optional[Tuple[int, int, int, int]] = None,
+    self, parameter: CroppingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        movie_list (List[str]): list of movies
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        position_parameter (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. Defaults to None. If this variable is None, this will be selected using GUI window
-    """
-    self.__movie_list = movie_list
-    self.__is_colored = is_colored
-    self.__position_parameter = position_parameter
-
-  def get_movie_list(self) -> List[str]:
-    return self.__movie_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
-  def get_position_parameter(self) -> Optional[Tuple[int, int, int, int]]:
-    return self.__position_parameter
+  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+    return self.__parameter.positions
 
   def execute(self):
     """capturing process
@@ -660,24 +659,24 @@ class CroppingMovie:
     Returns:
         List[str]: list of output (movie) path names
     """
-    if self.get_position_parameter() is not None:
-      positions = self.get_position_parameter()
+    if self.get_positions() is not None:
+      positions = self.get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be > 1st")
         return
 
-    output_path_list = get_output_path(self.get_movie_list(), "cropped")
+    output_path_list = get_output_path(self.get_target_list(), "cropped")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
       print("cropping movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       ret, frame = cap.read()
-      if self.get_position_parameter() is None:
-        positions = select_position_parameter(movie, frame)
+      if self.get_positions() is None:
+        positions = select_positions(movie, frame)
         if positions is None:
           continue
 
@@ -704,30 +703,18 @@ class CroppingPicture:
   """class to capture picture"""
 
   def __init__(
-    self,
-    picture_list: List[str],
-    is_colored: bool = False,
-    position_parameter: Optional[Tuple[int, int, int, int]] = None,
+    self, parameter: CroppingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of pictures or directories where pictures are stored
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        position_parameter (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. Defaults to None. If this variable is None, this will be selected using GUI window
-    """
-    self.__picture_list = picture_list
-    self.__is_colored = is_colored
-    self.__position_parameter = position_parameter
-
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
-  def get_position_parameter(self) -> Optional[Tuple[int, int, int, int]]:
-    return self.__position_parameter
+  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+    return self.__parameter.positions
 
   def execute(self):
     """cropping process
@@ -735,17 +722,17 @@ class CroppingPicture:
     Returns:
         List[str]: list of output (picture or directory) path names
     """
-    if self.get_position_parameter() is not None:
-      positions = self.get_position_parameter()
+    if self.get_positions() is not None:
+      positions = self.get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be larger than 1st")
         return
 
-    output_path_list = get_output_path(self.get_picture_list(), "cropped")
+    output_path_list = get_output_path(self.get_target_list(), "cropped")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -753,8 +740,8 @@ class CroppingPicture:
 
         print("cropping picture '{0}'...".format(picture))
         img = cv2.imread(picture)
-        if self.get_position_parameter() is None:
-          positions = select_position_parameter(picture, img)
+        if self.get_positions() is None:
+          positions = select_positions(picture, img)
           if positions is None:
             continue
 
@@ -772,8 +759,8 @@ class CroppingPicture:
         p_list = list(picture_path.iterdir())
         img = cv2.imread(str(p_list[0]))
 
-        if self.get_position_parameter() is None:
-          positions = select_position_parameter(picture, img)
+        if self.get_positions() is None:
+          positions = select_positions(picture, img)
           if positions is None:
             continue
 
@@ -790,7 +777,7 @@ class CroppingPicture:
     return return_list
 
 
-def select_position_parameter(
+def select_positions(
   picture: str, img: numpy.array
 ) -> Optional[Tuple[int, int, int, int]]:
   """select(get) two positions for capring process using GUI window
@@ -809,9 +796,7 @@ def select_position_parameter(
   add_texts_upper_left(img, ["crop:", "select two positions"])
   points: List[Tuple[int, int]] = []
   cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
-  cv2.setMouseCallback(
-    picture, mouse_on_select_position_parameter, [picture, img, w, h, points]
-  )
+  cv2.setMouseCallback(picture, mouse_on_select_positions, [picture, img, w, h, points])
   cv2.imshow(picture, img)
   print("--- crop ---")
   print("select positions in GUI window!")
@@ -850,7 +835,7 @@ def select_position_parameter(
       return None
 
 
-def mouse_on_select_position_parameter(event, x, y, flags, params):
+def mouse_on_select_positions(event, x, y, flags, params):
   """call back function on mouse click
   """
   picture, img, W, H, points = params
@@ -892,26 +877,31 @@ def mouse_on_select_position_parameter(event, x, y, flags, params):
     cv2.imshow(picture, img_show)
 
 
+class CreatingLuminanceHistgramParameter(NamedTuple):
+  """CreatingLuminanceHistgram process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+
+
 class CreatingLuminanceHistgramPicture:
   """class to create luminance histgram of picture"""
 
   def __init__(
-    self, picture_list: List[str], is_colored: bool = False,
+    self, parameter: CreatingLuminanceHistgramParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of pictures or directories where pictures are stored
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-    """
-    self.__picture_list = picture_list
-    self.__is_colored = is_colored
-
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
   def execute(self):
     """creating luminance histglam
@@ -919,11 +909,11 @@ class CreatingLuminanceHistgramPicture:
     Returns:
         List[str]: list of output (picture or directory) path names
     """
-    output_path_list = get_output_path(self.get_picture_list(), "histgram_luminance")
+    output_path_list = get_output_path(self.get_target_list(), "histgram_luminance")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -992,34 +982,36 @@ class CreatingLuminanceHistgramPicture:
     pyplot.close(fig)
 
 
+class ResizingParameter(NamedTuple):
+  """Resizing process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+  scales: Optional[Tuple[float, float]] = None
+
+
 class ResizingMovie:
   """class to resize movie"""
 
   def __init__(
-    self,
-    movie_list: List[str],
-    is_colored: bool = False,
-    scale_parameter: Optional[Tuple[float, float]] = None,
+    self, parameter: ResizingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        movie_list (List[str]): list of movies
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        scale_parameter (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
-    """
-    self.__movie_list = movie_list
-    self.__is_colored = is_colored
-    self.__scale_parameter = scale_parameter
-
-  def get_movie_list(self) -> List[str]:
-    return self.__movie_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
-  def get_scale_parameter(self) -> Optional[Tuple[float, float]]:
-    return self.__scale_parameter
+  def get_scales(self) -> Optional[Tuple[float, float]]:
+    return self.__parameter.scales
 
   def execute(self):
     """resizing process
@@ -1027,16 +1019,16 @@ class ResizingMovie:
     Returns:
         List[str]: list of output (movie) path names
     """
-    output_path_list = get_output_path(self.get_movie_list(), "resized")
+    output_path_list = get_output_path(self.get_target_list(), "resized")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    if self.get_scale_parameter() is not None:
-      scale_x, scale_y = self.get_scale_parameter()
+    if self.get_scales() is not None:
+      scale_x, scale_y = self.get_scales()
     else:
       scale_x, scale_y = (1.0, 1.0)
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
       print("resizing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
@@ -1063,30 +1055,18 @@ class ResizingPicture:
   """class to resize picture"""
 
   def __init__(
-    self,
-    picture_list: List[str],
-    is_colored: bool = False,
-    scale_parameter: Optional[Tuple[float, float]] = None,
+    self, parameter: ResizingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of pictures or directories where pictures are stored
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        scale_parameter (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
-    """
-    self.__picture_list = picture_list
-    self.__is_colored = is_colored
-    self.__scale_parameter = scale_parameter
-
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
-  def get_scale_parameter(self) -> Optional[Tuple[float, float]]:
-    return self.__scale_parameter
+  def get_scales(self) -> Optional[Tuple[float, float]]:
+    return self.__parameter.scales
 
   def execute(self):
     """resizing process
@@ -1094,16 +1074,16 @@ class ResizingPicture:
     Returns:
         List[str]: list of output (picture or directory) path names
     """
-    output_path_list = get_output_path(self.get_picture_list(), "resized")
+    output_path_list = get_output_path(self.get_target_list(), "resized")
     clean_output_directory(output_path_list)
     return_list: List[str] = []
 
-    if self.get_scale_parameter() is not None:
-      scale_x, scale_y = self.get_scale_parameter()
+    if self.get_scales() is not None:
+      scale_x, scale_y = self.get_scales()
     else:
       scale_x, scale_y = (1.0, 1.0)
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -1137,35 +1117,37 @@ class ResizingPicture:
     return return_list
 
 
+class RotatingParameter(NamedTuple):
+  """Rotating process parameters
+
+  Attributes:
+      target_list (List[str]): list of pictures, directories where pictures are stored, or movies
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      degree (Optional[float], optional): degree of rotation. Defaults to None.
+  """
+
+  target_list: List[str]
+  is_colored: bool = False
+  degree: Optional[float] = None
+
+
 class RotatingMovie:
   """class to rotate movie
   """
 
   def __init__(
-    self,
-    movie_list: List[str],
-    is_colored: bool = False,
-    degree: Optional[float] = None,
+    self, parameter: RotatingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        movie_list (List[str]): list of movies
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        degree (Optional[float], optional): degree of rotation. Defaults to None.
-    """
-    self.__movie_list = movie_list
-    self.__is_colored = is_colored
-    self.__degree = degree
-
-  def get_movie_list(self) -> List[str]:
-    return self.__movie_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
   def get_degree(self) -> Optional[float]:
-    return self.__degree
+    return self.__parameter.degree
 
   def execute(self):
     """rotating process
@@ -1173,14 +1155,14 @@ class RotatingMovie:
     Returns:
         List[str]: list of output (movie) path names
     """
-    output_path_list = get_output_path(self.get_movie_list(), "rotated")
+    output_path_list = get_output_path(self.get_target_list(), "rotated")
     clean_output_directory(output_path_list)
     degree = 0.0 if self.get_degree() is None else self.get_degree()
     rad = degree / 180.0 * numpy.pi
     sin_rad, cos_rad = numpy.absolute(numpy.sin(rad)), numpy.absolute(numpy.cos(rad))
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
       print("rotating movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
@@ -1216,30 +1198,18 @@ class RotatingPicture:
   """class to rotate picture"""
 
   def __init__(
-    self,
-    picture_list: List[str],
-    is_colored: bool = False,
-    degree: Optional[float] = None,
+    self, parameter: RotatingParameter,
   ):
-    """constructor
+    self.__parameter = parameter
 
-    Args:
-        picture_list (List[str]): list of pictures or directories where pictures are stored
-        is_colored (bool, optional): flag to output in color. Defaults to False.
-        degree (Optional[float], optional): degree of rotation. Defaults to None.
-    """
-    self.__picture_list = picture_list
-    self.__is_colored = is_colored
-    self.__degree = degree
-
-  def get_picture_list(self) -> List[str]:
-    return self.__picture_list
+  def get_target_list(self) -> List[str]:
+    return self.__parameter.target_list
 
   def is_colored(self) -> bool:
-    return self.__is_colored
+    return self.__parameter.is_colored
 
   def get_degree(self) -> Optional[float]:
-    return self.__degree
+    return self.__parameter.degree
 
   def execute(self):
     """rotating process
@@ -1247,14 +1217,14 @@ class RotatingPicture:
     Returns:
         List[str]: list of output (picture or directory) path names
     """
-    output_path_list = get_output_path(self.get_picture_list(), "rotated")
+    output_path_list = get_output_path(self.get_target_list(), "rotated")
     clean_output_directory(output_path_list)
     degree = 0.0 if self.get_degree() is None else self.get_degree()
     rad = degree / 180.0 * numpy.pi
     sin_rad, cos_rad = numpy.absolute(numpy.sin(rad)), numpy.absolute(numpy.cos(rad))
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
       picture_path = pathlib.Path(picture)
 
@@ -1322,15 +1292,10 @@ class ProcessExecution:
   """class for executing ABCProcess object"""
 
   def __init__(self, process: ABCProcess):
-    """constructor
-
-    Args:
-        process (ABCProcess): image-process object
-    """
     self.__process = process
 
   def execute(self):
-    """executing image-process
+    """executing image process
     """
     self.__process.execute()
 
@@ -1339,15 +1304,10 @@ class ProcessesExecution:
   """class for executing ABCProcess objects"""
 
   def __init__(self, processes: List[ABCProcess]):
-    """constructor
-
-    Args:
-        process (List[ABCProcess]): list of image-process objects
-    """
     self.__processes = processes
 
   def execute(self):
-    """executing image-process
+    """executing image processes
     """
     for process in self.__processes:
       process.execute()
