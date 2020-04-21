@@ -10,7 +10,7 @@ see usage of each api function below;
 
 """
 from typing import List, Tuple
-from image_process import process
+from imgproc import process
 
 
 def animate(*, picture: List[str] = None, is_colored: bool = False, fps: float = 20.0):

@@ -13,7 +13,7 @@ see usage '-h option'
 import argparse
 import sys
 from typing import List
-from image_process import process
+from imgproc import process
 
 
 def call_check_arg(
