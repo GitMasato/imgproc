@@ -6,7 +6,7 @@ click==7.1.1
 cycler==0.10.0
 entrypoints==0.3
 flake8==3.7.9
--e git+git@github.com:GitMasato/image_process.git@d024aeea12906ac9df78420c7ea936469ddfb287#egg=image_process
+-e git+git@github.com:GitMasato/imgproc.git@19892e9e5c3a27bace25741efcea7d331aaa30e0#egg=imgproc
 kiwisolver==1.2.0
 matplotlib==3.2.1
 mccabe==0.6.1
