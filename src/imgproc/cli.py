@@ -196,7 +196,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
       process.ABCProcessExecution: process.ABCProcessExecution object
   """
   parser = argparse.ArgumentParser(
-    prog="image_process.py",
+    prog="imgproc (imgproc.py)",
     formatter_class=argparse.RawTextHelpFormatter,
     description="python package providing functions of image process."
     + "\noutput data is generated in 'cv2' directory under current location.",
