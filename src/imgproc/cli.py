@@ -1,7 +1,6 @@
 """cli command for image process functions.
 
-Basic required arguments are list of movies or pictures. if no movie or picture is
-given, this program will be terminated
+Required arguments are list of movies or pictures. if no movie or picture is given, this program will be terminated.
 
 Output data (after image process) will be generated in 'cv2/target-noExtension/process-name/target' directory under current location (e.g. ./cv2/test/binarized/test.png). if movie/picture in 'cv2' directory is given as input (e.g. ./cv2/test/rotated/test.png), the output will be generated in same cv2 but 'selected process' directory (e.g. ./cv2/test/binarized/test.png)
 
@@ -202,7 +201,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
     prog="imgproc.py",
     formatter_class=argparse.RawTextHelpFormatter,
     description="python package providing functions of image process.\n"
-    + "Output data is generated in 'cv2' directory under current location.\n\n",
+    + "Output data is generated in 'cv2' directory under current location.\n\n"
     + "Examples:\n"
     + "  imgproc animate --picture tmp_dir --fps 20.0 --color\n",
   )
