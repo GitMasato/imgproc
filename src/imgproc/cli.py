@@ -7,6 +7,9 @@ Output data (after image process) will be generated in 'cv2/target-noExtension/p
 
 If directory path where pictures are stored is given as picture argument, same image-process will be applied to all pictures in the directory.
 
+Examples:
+  imgproc animate --picture tmp_dir --fps 20.0 --color
+
 see usage '-h option'
 
 """
@@ -198,8 +201,10 @@ def read_cli_argument() -> process.ABCProcessExecution:
   parser = argparse.ArgumentParser(
     prog="imgproc.py",
     formatter_class=argparse.RawTextHelpFormatter,
-    description="python package providing functions of image process."
-    + "\noutput data is generated in 'cv2' directory under current location.",
+    description="python package providing functions of image process.\n"
+    + "Output data is generated in 'cv2' directory under current location.\n\n",
+    + "Examples:\n"
+    + "  imgproc animate --picture tmp_dir --fps 20.0 --color\n",
   )
   subparsers = parser.add_subparsers()
 
