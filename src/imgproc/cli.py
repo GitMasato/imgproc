@@ -13,6 +13,7 @@ see usage '-h option'
 
 """
 import argparse
+import pathlib
 import sys
 from typing import List
 from imgproc import process
@@ -46,6 +47,11 @@ def call_check_arg(
   elif hasattr(args, "picture"):
     if not args.picture:
       sys.exit("no picture is given!")
+    for picture in args.picture:
+      path = pathlib.Path(picture)
+      if path.is_dir():
+        if not list(path.iterdir()):
+          sys.exit("no picture exists in '{0}'!".format(str(path)))
 
 
 def call_animate(
@@ -61,8 +67,11 @@ def call_animate(
       process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("animate", args, parser)
-  parameter = process.AnimatingParameter(args.picture, args.color, args.fps)
-  return process.ProcessExecution(process.AnimatingPicture(parameter))
+  return process.ProcessExecution(
+    process.AnimatingPicture(
+      picture_list=args.picture, is_colored=args.color, fps=args.fps
+    )
+  )
 
 
 def call_binarize(
@@ -80,11 +89,11 @@ def call_binarize(
   call_check_arg("binarize", args, parser)
   p: List[process.ABCProcess] = []
   if args.picture:
-    parameter = process.BinarizingParameter(args.picture, args.threshold)
-    p.append(process.BinarizingPicture(parameter))
+    p.append(
+      process.BinarizingPicture(picture_list=args.picture, thresholds=args.threshold)
+    )
   if args.movie:
-    parameter = process.BinarizingParameter(args.movie, args.threshold)
-    p.append(process.BinarizingMovie(parameter))
+    p.append(process.BinarizingMovie(movie_list=args.movie, thresholds=args.threshold))
   return process.ProcessesExecution(p)
 
 
@@ -101,8 +110,11 @@ def call_capture(
       process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("capture", args, parser)
-  parameter = process.CapturingParameter(args.movie, args.color, args.time)
-  return process.ProcessExecution(process.CapturingMovie(parameter))
+  return process.ProcessExecution(
+    process.CapturingMovie(
+      movie_list=args.movie, is_colored=args.color, times=args.time
+    )
+  )
 
 
 def call_crop(
@@ -120,11 +132,17 @@ def call_crop(
   call_check_arg("crop", args, parser)
   p: List[process.ABCProcess] = []
   if args.picture:
-    parameter = process.CroppingParameter(args.picture, args.color, args.position)
-    p.append(process.CroppingPicture(parameter))
+    p.append(
+      process.CroppingPicture(
+        picture_list=args.picture, is_colored=args.color, positions=args.position
+      )
+    )
   if args.movie:
-    parameter = process.CroppingParameter(args.movie, args.color, args.position)
-    p.append(process.CroppingMovie(parameter))
+    p.append(
+      process.CroppingMovie(
+        movie_list=args.movie, is_colored=args.color, positions=args.position
+      )
+    )
   return process.ProcessesExecution(p)
 
 
@@ -141,8 +159,11 @@ def call_hist_luminance(
       process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("hist-luminance", args, parser)
-  parameter = process.CreatingLuminanceHistgramParameter(args.picture, args.color)
-  return process.ProcessExecution(process.CreatingLuminanceHistgramPicture(parameter))
+  return process.ProcessExecution(
+    process.CreatingLuminanceHistgramPicture(
+      picture_list=args.picture, is_colored=args.color
+    )
+  )
 
 
 def call_resize(
@@ -160,11 +181,17 @@ def call_resize(
   call_check_arg("resize", args, parser)
   p: List[process.ABCProcess] = []
   if args.picture:
-    parameter = process.ResizingParameter(args.picture, args.color, args.scale)
-    p.append(process.ResizingPicture(parameter))
+    p.append(
+      process.ResizingPicture(
+        picture_list=args.picture, is_colored=args.color, scales=args.scale
+      )
+    )
   if args.movie:
-    parameter = process.ResizingParameter(args.movie, args.color, args.scale)
-    p.append(process.ResizingMovie(parameter))
+    p.append(
+      process.ResizingMovie(
+        movie_list=args.movie, is_colored=args.color, scales=args.scale
+      )
+    )
   return process.ProcessesExecution(p)
 
 
@@ -183,11 +210,17 @@ def call_rotate(
   call_check_arg("rotate", args, parser)
   p: List[process.ABCProcess] = []
   if args.picture:
-    parameter = process.RotatingParameter(args.picture, args.color, args.degree)
-    p.append(process.RotatingPicture(parameter))
+    p.append(
+      process.RotatingPicture(
+        picture_list=args.picture, is_colored=args.color, degree=args.degree
+      )
+    )
   if args.movie:
-    parameter = process.RotatingParameter(args.movie, args.color, args.degree)
-    p.append(process.RotatingMovie(parameter))
+    p.append(
+      process.RotatingMovie(
+        movie_list=args.movie, is_colored=args.color, degree=args.degree
+      )
+    )
   return process.ProcessesExecution(p)
 
 

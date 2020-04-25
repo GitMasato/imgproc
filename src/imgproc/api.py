@@ -9,182 +9,204 @@ If directory path where pictures are stored is given as picture argument, same i
 see usage of each api function below;
 
 """
-from typing import List, Tuple
+from typing import List, Tuple, Optional
 from imgproc import process
 
 
-def animate(*, picture: List[str] = None, is_colored: bool = False, fps: float = 20.0):
+def animate(
+  *,
+  picture_list: Optional[List[str]] = None,
+  is_colored: bool = False,
+  fps: Optional[float] = 20.0,
+):
   """api to animate pictures (note: keyword-only argument)
 
   Args:
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
+      picture (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       fps (float, optional): fps of created movie. Defaults to 20.0.
   """
-  if not picture:
+  if not picture_list:
     print("no picture is given!")
     return False
 
-  parameter = process.AnimatingParameter(picture, is_colored, fps)
-  image_process = process.ProcessExecution(process.AnimatingPicture(parameter))
+  image_process = process.ProcessExecution(
+    process.AnimatingPicture(picture_list=picture_list, is_colored=is_colored, fps=fps)
+  )
   image_process.execute()
 
 
 def binarize(
   *,
-  movie: List[str] = None,
-  picture: List[str] = None,
+  movie_list: Optional[List[str]] = None,
+  picture_list: Optional[List[str]] = None,
   thresholds: Tuple[int, int] = None,
 ):
   """api to binarize movie/picture (note: keyword-only argument)
 
   Args:
-      movie (List[str], optional): list of movie-file paths. Defaults to None.
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
-      thresholds (Tuple[int, int], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. Defaults to None. If this variable is None, this will be selected using GUI window
+      movie_list (List[str], optional): list of movie-file paths. Defaults to None.
+      picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
+      thresholds (Tuple[int, int], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. If this variable is None, this will be selected using GUI window. Defaults to None.
   """
-  if not movie and not picture:
+  if not movie_list and not picture_list:
     print("no movie and picture is given!")
     return False
 
   p: List[process.ABCProcess] = []
-  if movie:
-    parameter = process.BinarizingParameter(movie, thresholds)
-    p.append(process.BinarizingPicture(parameter))
-  if picture:
-    parameter = process.BinarizingParameter(picture, thresholds)
-    p.append(process.BinarizingPicture(parameter))
+  if movie_list:
+    p.append(process.BinarizingMovie(movie_list=movie_list, thresholds=thresholds))
+  if picture_list:
+    p.append(
+      process.BinarizingPicture(picture_list=picture_list, thresholds=thresholds)
+    )
   image_process = process.ProcessesExecution(p)
   image_process.execute()
 
 
 def capture(
   *,
-  movie: List[str] = None,
+  movie_list: List[str] = None,
   is_colored: bool = False,
   times: Tuple[float, float, float] = None,
 ):
   """api to capture movies (note: keyword-only argument)
 
   Args:
-      movie (List[str], optional): list of movie-file paths. Defaults to None.
+      movie_list (List[str], optional): list of movie-file paths. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). Start must be smaller than stop, and difference between start and stop must be larger than step. Defaults to None. If this variable is None, this will be selected using GUI window
   """
-  if not movie:
+  if not movie_list:
     print("no movie is given!")
     return False
 
-  parameter = process.CapturingParameter(movie, is_colored, times)
-  image_process = process.ProcessExecution(process.CapturingMovie(parameter))
+  image_process = process.ProcessExecution(
+    process.CapturingMovie(movie_list=movie_list, is_colored=is_colored, times=times)
+  )
   image_process.execute()
 
 
 def crop(
   *,
-  movie: List[str] = None,
-  picture: List[str] = None,
+  movie_list: Optional[List[str]] = None,
+  picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
-  postisions: Tuple[int, int, int, int] = None,
+  positions: Optional[Tuple[int, int, int, int]] = None,
 ):
   """api to crop movie/picture (note: keyword-only argument)
 
   Args:
-      movie (List[str], optional): list of movie-file paths. Defaults to None.
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
+      movie_list (List[str], optional): list of movie-file paths. Defaults to None.
+      picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       postisions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
   """
-  if not movie and not picture:
+  if not movie_list and not picture_list:
     print("no movie and picture is given!")
     return False
 
   p: List[process.ABCProcess] = []
-  if movie:
-    parameter = process.CroppingParameter(movie, is_colored, postisions)
-    p.append(process.CroppingMovie(parameter))
-  if picture:
-    parameter = process.CroppingParameter(picture, is_colored, postisions)
-    p.append(process.CroppingPicture(parameter))
+  if movie_list:
+    p.append(
+      process.CroppingMovie(
+        movie_list=movie_list, is_colored=is_colored, positions=positions
+      )
+    )
+  if picture_list:
+    p.append(
+      process.CroppingPicture(
+        picture_list=picture_list, is_colored=is_colored, positions=positions
+      )
+    )
   image_process = process.ProcessesExecution(p)
   image_process.execute()
 
 
 def hist_luminance(
-  *, picture: List[str] = None, is_colored: bool = False,
+  *, picture_list: Optional[List[str]] = None, is_colored: bool = False
 ):
   """api to create histgram of luminance (bgr or gray) of picture (note: keyword-only argument)
 
   Args:
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
+      picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
   """
-  if not picture:
+  if not picture_list:
     print("no picture is given!")
     return False
 
-  parameter = process.CreatingLuminanceHistgramParameter(picture, is_colored)
   image_process = process.ProcessExecution(
-    process.CreatingLuminanceHistgramPicture(parameter)
+    process.CreatingLuminanceHistgramPicture(
+      picture_list=picture_list, is_colored=is_colored
+    )
   )
   image_process.execute()
 
 
 def resize(
   *,
-  movie: List[str] = None,
-  picture: List[str] = None,
+  movie_list: Optional[List[str]] = None,
+  picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
   scales: Tuple[float, float] = (1.0, 1.0),
 ):
   """api to resize movie/picture (note: keyword-only argument)
 
   Args:
-      movie (List[str], optional): list of movie-file paths. Defaults to None.
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
+      movie_list (List[str], optional): list of movie-file paths. Defaults to None.
+      picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       scales (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to (1.0,1.0).
   """
-  if not movie and not picture:
+  if not movie_list and not picture_list:
     print("no movie and picture is given!")
     return False
 
   p: List[process.ABCProcess] = []
-  if movie:
-    parameter = process.ResizingParameter(movie, is_colored, scales)
-    p.append(process.ResizingMovie(parameter))
-  if picture:
-    parameter = process.ResizingParameter(picture, is_colored, scales)
-    p.append(process.ResizingPicture(parameter))
+  if movie_list:
+    p.append(
+      process.ResizingMovie(movie_list=movie_list, is_colored=is_colored, scales=scales)
+    )
+  if picture_list:
+    p.append(
+      process.ResizingPicture(
+        picture_list=picture_list, is_colored=is_colored, scales=scales
+      )
+    )
   image_process = process.ProcessesExecution(p)
   image_process.execute()
 
 
 def rotate(
   *,
-  movie: List[str] = None,
-  picture: List[str] = None,
+  movie_list: Optional[List[str]] = None,
+  picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
-  degree: float = 0.0,
+  degree: Optional[float] = 0.0,
 ):
   """api to rotate movie/picture (note: keyword-only argument)
 
   Args:
-      movie (List[str], optional): list of movie-file paths. Defaults to None.
-      picture (List[str], optional): list of paths of pictures or directories where pictures are stored.
+      movie_list (List[str], optional): list of movie-file paths. Defaults to None.
+      picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       degree (float, optional): degree of rotation. Defaults to 0.0.
   """
-  if not movie and not picture:
+  if not movie_list and not picture_list:
     print("no movie and picture is given!")
     return False
 
   p: List[process.ABCProcess] = []
-  if movie:
-    parameter = process.RotatingParameter(movie, is_colored, degree)
-    p.append(process.RotatingMovie(parameter))
-  if picture:
-    parameter = process.RotatingParameter(picture, is_colored, degree)
-    p.append(process.RotatingPicture(parameter))
+  if movie_list:
+    p.append(
+      process.RotatingMovie(movie_list=movie_list, is_colored=is_colored, degree=degree)
+    )
+  if picture_list:
+    p.append(
+      process.RotatingPicture(
+        picture_list=picture_list, is_colored=is_colored, degree=degree
+      )
+    )
   image_process = process.ProcessesExecution(p)
   image_process.execute()
