@@ -2406,37 +2406,3 @@ def get_rotated_image(
   affine_matrix[0][2] = affine_matrix[0][2] - W / 2 + W_rot / 2
   affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
   return cv2.warpAffine(img, affine_matrix, size_rot, flags=cv2.INTER_CUBIC)
-
-
-class ABCProcessExecution(Protocol):
-  """abstract base class for executing ABCProcess object/objects"""
-
-  def execute(self):
-    pass
-
-
-class ProcessExecution:
-  """class for executing ABCProcess object"""
-
-  def __init__(self, process: ABCProcess):
-    self.__process = process
-
-  def execute(self):
-    """executing image process
-    """
-    return [self.__process.execute()]
-
-
-class ProcessesExecution:
-  """class for executing ABCProcess objects"""
-
-  def __init__(self, processes: List[ABCProcess]):
-    self.__processes = processes
-
-  def execute(self):
-    """executing image processes
-    """
-    exe_list = []
-    for process in self.__processes:
-      exe_list.append(process.execute())
-    return exe_list

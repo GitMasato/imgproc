@@ -15,7 +15,6 @@ see usage '-h option'
 import argparse
 import pathlib
 import sys
-from typing import List
 from imgproc import process
 
 
@@ -38,197 +37,105 @@ def call_check_arg(
   if not [item for item in items if item is not None]:
     sys.exit(parser.parse_args([arg_name, "--help"]))
 
-  if hasattr(args, "movie") and hasattr(args, "picture"):
-    if not args.movie and not args.picture:
-      sys.exit("no movie and picture is given!")
-  elif hasattr(args, "movie"):
-    if not args.movie:
-      sys.exit("no movie is given!")
-  elif hasattr(args, "picture"):
-    if not args.picture:
-      sys.exit("no picture is given!")
-    for picture in args.picture:
-      path = pathlib.Path(picture)
-      if path.is_dir():
-        if not list(path.iterdir()):
-          sys.exit("no picture exists in '{0}'!".format(str(path)))
+  if hasattr(args, "target"):
+    if not args.target:
+      sys.exit("no target is given!")
+
+  if hasattr(args, "type"):
+    if args.type == "picture":
+      for t in args.target:
+        path = pathlib.Path(t)
+        if path.is_dir():
+          if not list(path.iterdir()):
+            sys.exit("no picture exists in '{0}'!".format(str(path)))
 
 
-def call_animate(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when animate command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("animate", args, parser)
-  return process.ProcessExecution(
-    process.AnimatingPicture(
-      picture_list=args.picture, is_colored=args.color, fps=args.fps
-    )
+  return process.AnimatingPicture(
+    picture_list=args.target, is_colored=args.color, fps=args.fps
   )
 
 
-def call_binarize(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_binarize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when binarize command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("binarize", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(
-      process.BinarizingPicture(picture_list=args.picture, thresholds=args.threshold)
+  if args.type == "picture":
+    return process.BinarizingPicture(
+      picture_list=args.target, thresholds=args.threshold
     )
-  if args.movie:
-    p.append(process.BinarizingMovie(movie_list=args.movie, thresholds=args.threshold))
-  return process.ProcessesExecution(p)
+  elif args.type == "movie":
+    return process.BinarizingMovie(movie_list=args.target, thresholds=args.threshold)
 
 
-def call_capture(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when capture command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("capture", args, parser)
-  return process.ProcessExecution(
-    process.CapturingMovie(
-      movie_list=args.movie, is_colored=args.color, times=args.time
-    )
+  return process.CapturingMovie(
+    movie_list=args.target, is_colored=args.color, times=args.time
   )
 
 
-def call_crop(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when crop command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("crop", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(
-      process.CroppingPicture(
-        picture_list=args.picture, is_colored=args.color, positions=args.position
-      )
+  if args.type == "picture":
+    return process.CroppingPicture(
+      picture_list=args.target, is_colored=args.color, positions=args.position
     )
-  if args.movie:
-    p.append(
-      process.CroppingMovie(
-        movie_list=args.movie, is_colored=args.color, positions=args.position
-      )
+  elif args.type == "movie":
+    return process.CroppingMovie(
+      movie_list=args.target, is_colored=args.color, positions=args.position
     )
-  return process.ProcessesExecution(p)
 
 
-def call_hist_luminance(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_hist_luminance(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when hist_luminance command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("hist-luminance", args, parser)
-  return process.ProcessExecution(
-    process.CreatingLuminanceHistgramPicture(
-      picture_list=args.picture, is_colored=args.color
-    )
+  return process.CreatingLuminanceHistgramPicture(
+    picture_list=args.target, is_colored=args.color
   )
 
 
-def call_resize(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_resize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when resize command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("resize", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(
-      process.ResizingPicture(
-        picture_list=args.picture, is_colored=args.color, scales=args.scale
-      )
+  if args.type == "picture":
+    return process.ResizingPicture(
+      picture_list=args.target, is_colored=args.color, scales=args.scale
     )
-  if args.movie:
-    p.append(
-      process.ResizingMovie(
-        movie_list=args.movie, is_colored=args.color, scales=args.scale
-      )
+  elif args.type == "movie":
+    return process.ResizingMovie(
+      movie_list=args.target, is_colored=args.color, scales=args.scale
     )
-  return process.ProcessesExecution(p)
 
 
-def call_rotate(
-  args: argparse.Namespace, parser: argparse.ArgumentParser
-) -> process.ABCProcessExecution:
+def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when rotate command is given
-
-  Args:
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
   """
   call_check_arg("rotate", args, parser)
-  p: List[process.ABCProcess] = []
-  if args.picture:
-    p.append(
-      process.RotatingPicture(
-        picture_list=args.picture, is_colored=args.color, degree=args.degree
-      )
+  if args.type == "picture":
+    return process.RotatingPicture(
+      picture_list=args.target, is_colored=args.color, degree=args.degree
     )
-  if args.movie:
-    p.append(
-      process.RotatingMovie(
-        movie_list=args.movie, is_colored=args.color, degree=args.degree
-      )
+  elif args.type == "movie":
+    return process.RotatingMovie(
+      movie_list=args.target, is_colored=args.color, degree=args.degree
     )
-  return process.ProcessesExecution(p)
 
 
-def read_cli_argument() -> process.ABCProcessExecution:
+def read_cli_argument() -> process.ABCProcess:
   """read and parse cli arguments
 
   Returns:
-      process.ABCProcessExecution: process.ABCProcessExecution object
+      process.ABCProcess: process.ABCProcess object
   """
   parser = argparse.ArgumentParser(
     prog="imgproc.py",
@@ -240,24 +147,19 @@ def read_cli_argument() -> process.ABCProcessExecution:
   )
   subparsers = parser.add_subparsers()
 
-  def add_argument_movie(parser: argparse.ArgumentParser):
+  def add_argument_type(parser: argparse.ArgumentParser):
     parser.add_argument(
-      "--movie",
-      nargs="*",
-      type=str,
-      default=None,
-      metavar="path",
-      help="movie path" + "\n ",
+      "--type", required=True, choices=["picture", "movie"], help="target type" + "\n ",
     )
 
-  def add_argument_picture(parser: argparse.ArgumentParser):
+  def add_argument_target(parser: argparse.ArgumentParser):
     parser.add_argument(
-      "--picture",
+      "--target",
       nargs="*",
       type=str,
       default=None,
       metavar="path",
-      help="path of picture or directory where pictures are stored"
+      help="path of movie, picture, or directory where pictures are stored"
       + "\nIf directory name is given,"
       + "\nsame process will be applied to all pictures in the directory"
       + "\n ",
@@ -278,7 +180,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
     + "\n ",
     description="sub-command 'animate': to crate movie (mp4) from pictures",
   )
-  add_argument_picture(parser_animate)
+  add_argument_target(parser_animate)
   add_argument_color(parser_animate)
   parser_animate.set_defaults(call=call_animate)
   parser_animate.add_argument(
@@ -297,8 +199,8 @@ def read_cli_argument() -> process.ABCProcessExecution:
     help="to binarize picture/movie" + "\n(see sub-option 'binarize -h')" + "\n ",
     description="sub-command 'binarize': to binarize picture/movie",
   )
-  add_argument_movie(parser_binarize)
-  add_argument_picture(parser_binarize)
+  add_argument_type(parser_binarize)
+  add_argument_target(parser_binarize)
   parser_binarize.set_defaults(call=call_binarize)
   parser_binarize.add_argument(
     "--threshold",
@@ -317,7 +219,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
     help="to capture movie" + "\n(see sub-option 'capture -h')" + "\n ",
     description="sub-command 'capture': to capture movie",
   )
-  add_argument_movie(parser_capture)
+  add_argument_target(parser_capture)
   add_argument_color(parser_capture)
   parser_capture.set_defaults(call=call_capture)
   parser_capture.add_argument(
@@ -337,8 +239,8 @@ def read_cli_argument() -> process.ABCProcessExecution:
     help="to crop movie/picture" + "\n(see sub-option 'crop -h')" + "\n ",
     description="sub-command 'crop': to crop movie/picture",
   )
-  add_argument_movie(parser_crop)
-  add_argument_picture(parser_crop)
+  add_argument_type(parser_crop)
+  add_argument_target(parser_crop)
   add_argument_color(parser_crop)
   parser_crop.set_defaults(call=call_crop)
   parser_crop.add_argument(
@@ -360,7 +262,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
     + "\n ",
     description="sub-command 'hist_luminance': to create luminance histgram of picture",
   )
-  add_argument_picture(parser_hist_luminance)
+  add_argument_target(parser_hist_luminance)
   add_argument_color(parser_hist_luminance)
   parser_hist_luminance.set_defaults(call=call_hist_luminance)
 
@@ -370,8 +272,8 @@ def read_cli_argument() -> process.ABCProcessExecution:
     help="to resize movie/picture" + "\n(see sub-option 'resize -h')" + "\n ",
     description="sub-command 'resize': to resize movie/picture",
   )
-  add_argument_movie(parser_resize)
-  add_argument_picture(parser_resize)
+  add_argument_type(parser_resize)
+  add_argument_target(parser_resize)
   add_argument_color(parser_resize)
   parser_resize.set_defaults(call=call_resize)
   parser_resize.add_argument(
@@ -391,8 +293,8 @@ def read_cli_argument() -> process.ABCProcessExecution:
     help="to rotate movie/picture" + "\n(see sub-option 'rotate -h')",
     description="sub-command 'rotate': to rotate movie/picture",
   )
-  add_argument_movie(parser_rotate)
-  add_argument_picture(parser_rotate)
+  add_argument_type(parser_rotate)
+  add_argument_target(parser_rotate)
   add_argument_color(parser_rotate)
   parser_rotate.set_defaults(call=call_rotate)
   parser_rotate.add_argument(
@@ -416,7 +318,7 @@ def main() -> None:
   """cli command main function
   """
   image_process = read_cli_argument()
-  print(image_process.execute())
+  image_process.execute()
 
 
 if __name__ == "__main__":
