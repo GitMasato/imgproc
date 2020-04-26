@@ -259,7 +259,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
       metavar="path",
       help="path of picture or directory where pictures are stored"
       + "\nIf directory name is given,"
-      + "same process will be applied to all pictures in the directory"
+      + "\nsame process will be applied to all pictures in the directory"
       + "\n ",
     )
 
@@ -286,7 +286,9 @@ def read_cli_argument() -> process.ABCProcessExecution:
     type=float,
     default=None,
     metavar="fps",
-    help="fps of created movie (float) default=20.0" + "\n ",
+    help="fps of created movie (float)"
+    + "\nif this is not given, you will select this in GUI window"
+    + "\n ",
   )
 
   parser_binarize = subparsers.add_parser(
@@ -324,8 +326,7 @@ def read_cli_argument() -> process.ABCProcessExecution:
     type=float,
     default=None,
     metavar=("start", "stop", "step"),
-    help="time at the beginning and end of capture"
-    + "\nand the time step (float) [s]"
+    help="time at beginning and end of capture and time step (float) [s]"
     + "\nif this is not given, you will select this in GUI window"
     + "\n ",
   )
@@ -379,7 +380,9 @@ def read_cli_argument() -> process.ABCProcessExecution:
     type=float,
     default=None,
     metavar=("x", "y"),
-    help="scaling ratio (float) default=(1.0,1.0)" + "\n ",
+    help="scaling ratio (float) [x,y]"
+    + "\nif this is not given, you will select this in GUI window"
+    + "\n ",
   )
 
   parser_rotate = subparsers.add_parser(
@@ -397,7 +400,9 @@ def read_cli_argument() -> process.ABCProcessExecution:
     type=float,
     default=None,
     metavar=("degree"),
-    help="degree of rotation (float) [degree] default=0.0" + "\n ",
+    help="degree of rotation (float) [degree]"
+    + "\nif this is not given, you will select this in GUI window"
+    + "\n ",
   )
 
   if len(sys.argv) <= 1:
@@ -411,7 +416,7 @@ def main() -> None:
   """cli command main function
   """
   image_process = read_cli_argument()
-  image_process.execute()
+  print(image_process.execute())
 
 
 if __name__ == "__main__":

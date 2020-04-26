@@ -17,14 +17,14 @@ def animate(
   *,
   picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
-  fps: Optional[float] = 20.0,
+  fps: Optional[float] = None,
 ):
   """api to animate pictures (note: keyword-only argument)
 
   Args:
       picture (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      fps (float, optional): fps of created movie. Defaults to 20.0.
+      fps (float, optional): fps of created movie. Defaults to None. if this is not given, you will select this in GUI window
   """
   if not picture_list:
     print("no picture is given!")
@@ -149,7 +149,7 @@ def resize(
   movie_list: Optional[List[str]] = None,
   picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
-  scales: Tuple[float, float] = (1.0, 1.0),
+  scales: Tuple[float, float] = None,
 ):
   """api to resize movie/picture (note: keyword-only argument)
 
@@ -157,7 +157,7 @@ def resize(
       movie_list (List[str], optional): list of movie-file paths. Defaults to None.
       picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      scales (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to (1.0,1.0).
+      scales (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to None. if this is not given, you will select this in GUI window
   """
   if not movie_list and not picture_list:
     print("no movie and picture is given!")
@@ -183,7 +183,7 @@ def rotate(
   movie_list: Optional[List[str]] = None,
   picture_list: Optional[List[str]] = None,
   is_colored: bool = False,
-  degree: Optional[float] = 0.0,
+  degree: Optional[float] = None,
 ):
   """api to rotate movie/picture (note: keyword-only argument)
 
@@ -191,7 +191,7 @@ def rotate(
       movie_list (List[str], optional): list of movie-file paths. Defaults to None.
       picture_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      degree (float, optional): degree of rotation. Defaults to 0.0.
+      degree (float, optional): degree of rotation. Defaults to None. if this is not given, you will select this in GUI window
   """
   if not movie_list and not picture_list:
     print("no movie and picture is given!")
