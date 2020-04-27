@@ -13,7 +13,6 @@ see usage '-h option'
 
 """
 import argparse
-import pathlib
 import sys
 from imgproc import process
 
@@ -27,9 +26,6 @@ def call_check_arg(
       arg_name (str): subcommand name
       args (argparse.Namespace): argparse.Namespace object
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
-
-  Raises:
-      exception.ArgMissingError: when given cli-argument is not enough
   """
   items = [
     value for key, value in args.__dict__.items() if key != "call" and key != "color"
@@ -41,115 +37,177 @@ def call_check_arg(
     if not args.target:
       sys.exit("no target is given!")
 
-  if hasattr(args, "type"):
-    if args.type == "picture":
-      for t in args.target:
-        path = pathlib.Path(t)
-        if path.is_dir():
-          if not list(path.iterdir()):
-            sys.exit("no picture exists in '{0}'!".format(str(path)))
-
 
 def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when animate command is given
   """
   call_check_arg("animate", args, parser)
-  return process.AnimatingPicture(
-    picture_list=args.target, is_colored=args.color, fps=args.fps
-  )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not p_list and not d_list:
+    sys.exit("no picture, directory is given!")
+
+  if p_list:
+    process.AnimatingPicture(
+      target_list=p_list, is_colored=args.color, fps=args.fps
+    ).execute()
+
+  if d_list:
+    process.AnimatingPictureDirectory(
+      target_list=d_list, is_colored=args.color, fps=args.fps
+    ).execute()
 
 
 def call_binarize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when binarize command is given
   """
   call_check_arg("binarize", args, parser)
-  if args.type == "picture":
-    return process.BinarizingPicture(
-      picture_list=args.target, thresholds=args.threshold
-    )
-  elif args.type == "movie":
-    return process.BinarizingMovie(movie_list=args.target, thresholds=args.threshold)
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.BinarizingMovie(target_list=m_list, thresholds=args.threshold).execute()
+
+  if p_list:
+    process.BinarizingPicture(target_list=p_list, thresholds=args.threshold).execute()
+
+  if d_list:
+    process.BinarizingPictureDirectory(
+      target_list=d_list, thresholds=args.threshold
+    ).execute()
 
 
 def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when capture command is given
   """
   call_check_arg("capture", args, parser)
-  return process.CapturingMovie(
-    movie_list=args.target, is_colored=args.color, times=args.time
-  )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list:
+    sys.exit("no movie is given!")
+
+  if m_list:
+    process.CapturingMovie(
+      target_list=m_list, is_colored=args.color, times=args.time
+    ).execute()
 
 
 def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when concatenate command is given
   """
   call_check_arg("concatenate", args, parser)
-  if args.type == "picture":
-    return process.ConcatenatingPicture(
-      picture_list=args.target, is_colored=args.color, number=args.number
-    )
-  elif args.type == "movie":
-    return process.ConcatenatingMovie(
-      movie_list=args.target, is_colored=args.color, number=args.number
-    )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.ConcatenatingMovie(
+      target_list=m_list, is_colored=args.color, number=args.number
+    ).execute()
+
+  if p_list:
+    process.ConcatenatingPicture(
+      target_list=p_list, is_colored=args.color, number=args.number
+    ).execute()
+
+  if d_list:
+    process.ConcatenatingPictureDirectory(
+      target_list=d_list, is_colored=args.color, number=args.number
+    ).execute()
 
 
 def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when crop command is given
   """
   call_check_arg("crop", args, parser)
-  if args.type == "picture":
-    return process.CroppingPicture(
-      picture_list=args.target, is_colored=args.color, positions=args.position
-    )
-  elif args.type == "movie":
-    return process.CroppingMovie(
-      movie_list=args.target, is_colored=args.color, positions=args.position
-    )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.CroppingMovie(
+      target_list=m_list, is_colored=args.color, positions=args.position
+    ).execute()
+
+  if p_list:
+    process.CroppingPicture(
+      target_list=p_list, is_colored=args.color, positions=args.position
+    ).execute()
+
+  if d_list:
+    process.CroppingPictureDirectory(
+      target_list=d_list, is_colored=args.color, positions=args.position
+    ).execute()
 
 
 def call_hist_luminance(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when hist_luminance command is given
   """
   call_check_arg("hist-luminance", args, parser)
-  return process.CreatingLuminanceHistgramPicture(
-    picture_list=args.target, is_colored=args.color
-  )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not p_list and not d_list:
+    sys.exit("no picture, directory is given!")
+
+  if p_list:
+    process.CreatingLuminanceHistgramPicture(
+      target_list=p_list, is_colored=args.color
+    ).execute()
+
+  if d_list:
+    process.CreatingLuminanceHistgramPictureDirectory(
+      target_list=d_list, is_colored=args.color
+    ).execute()
 
 
 def call_resize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when resize command is given
   """
   call_check_arg("resize", args, parser)
-  if args.type == "picture":
-    return process.ResizingPicture(
-      picture_list=args.target, is_colored=args.color, scales=args.scale
-    )
-  elif args.type == "movie":
-    return process.ResizingMovie(
-      movie_list=args.target, is_colored=args.color, scales=args.scale
-    )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.ResizingMovie(
+      target_list=m_list, is_colored=args.color, scales=args.scale
+    ).execute()
+
+  if p_list:
+    process.ResizingPicture(
+      target_list=p_list, is_colored=args.color, scales=args.scale
+    ).execute()
+
+  if d_list:
+    process.ResizingPictureDirectory(
+      target_list=d_list, is_colored=args.color, scales=args.scale
+    ).execute()
 
 
 def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when rotate command is given
   """
   call_check_arg("rotate", args, parser)
-  if args.type == "picture":
-    return process.RotatingPicture(
-      picture_list=args.target, is_colored=args.color, degree=args.degree
-    )
-  elif args.type == "movie":
-    return process.RotatingMovie(
-      movie_list=args.target, is_colored=args.color, degree=args.degree
-    )
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.RotatingMovie(
+      target_list=m_list, is_colored=args.color, degree=args.degree
+    ).execute()
+
+  if p_list:
+    process.RotatingPicture(
+      target_list=p_list, is_colored=args.color, degree=args.degree
+    ).execute()
+
+  if d_list:
+    process.RotatingPictureDirectory(
+      target_list=d_list, is_colored=args.color, degree=args.degree
+    ).execute()
 
 
-def read_cli_argument() -> process.ABCProcess:
-  """read and parse cli arguments
-
-  Returns:
-      process.ABCProcess: process.ABCProcess object
+def cli_execution():
+  """read, parse, and execute cli arguments
   """
   parser = argparse.ArgumentParser(
     prog="imgproc.py",
@@ -157,14 +215,9 @@ def read_cli_argument() -> process.ABCProcess:
     description="python package providing functions of image process.\n"
     + "Output data is generated in 'cv2' directory under current location.\n\n"
     + "Examples:\n"
-    + "  imgproc animate --picture tmp_dir --fps 20.0 --color\n",
+    + "  imgproc animate --target tmp_dir --fps 20.0 --color\n",
   )
   subparsers = parser.add_subparsers()
-
-  def add_argument_type(parser: argparse.ArgumentParser):
-    parser.add_argument(
-      "--type", required=True, choices=["picture", "movie"], help="target type" + "\n ",
-    )
 
   def add_argument_target(parser: argparse.ArgumentParser):
     parser.add_argument(
@@ -213,7 +266,6 @@ def read_cli_argument() -> process.ABCProcess:
     help="to binarize picture/movie" + "\n(see sub-option 'binarize -h')" + "\n ",
     description="sub-command 'binarize': to binarize picture/movie",
   )
-  add_argument_type(parser_binarize)
   add_argument_target(parser_binarize)
   parser_binarize.set_defaults(call=call_binarize)
   parser_binarize.add_argument(
@@ -255,7 +307,6 @@ def read_cli_argument() -> process.ABCProcess:
     + "\n\nmax number of targets is 25."
     + "\nsizes of pictures are adjusted based on first target size.",
   )
-  add_argument_type(parser_concatenate)
   add_argument_target(parser_concatenate)
   add_argument_color(parser_concatenate)
   parser_concatenate.set_defaults(call=call_concatenate)
@@ -276,7 +327,6 @@ def read_cli_argument() -> process.ABCProcess:
     help="to crop movie/picture" + "\n(see sub-option 'crop -h')" + "\n ",
     description="sub-command 'crop': to crop movie/picture",
   )
-  add_argument_type(parser_crop)
   add_argument_target(parser_crop)
   add_argument_color(parser_crop)
   parser_crop.set_defaults(call=call_crop)
@@ -309,7 +359,6 @@ def read_cli_argument() -> process.ABCProcess:
     help="to resize movie/picture" + "\n(see sub-option 'resize -h')" + "\n ",
     description="sub-command 'resize': to resize movie/picture",
   )
-  add_argument_type(parser_resize)
   add_argument_target(parser_resize)
   add_argument_color(parser_resize)
   parser_resize.set_defaults(call=call_resize)
@@ -330,7 +379,6 @@ def read_cli_argument() -> process.ABCProcess:
     help="to rotate movie/picture" + "\n(see sub-option 'rotate -h')",
     description="sub-command 'rotate': to rotate movie/picture",
   )
-  add_argument_type(parser_rotate)
   add_argument_target(parser_rotate)
   add_argument_color(parser_rotate)
   parser_rotate.set_defaults(call=call_rotate)
@@ -348,14 +396,13 @@ def read_cli_argument() -> process.ABCProcess:
     sys.exit(parser.format_help())
 
   args = parser.parse_args()
-  return args.call(args, parser)
+  args.call(args, parser)
 
 
 def main() -> None:
   """cli command main function
   """
-  image_process = read_cli_argument()
-  image_process.execute()
+  cli_execution()
 
 
 if __name__ == "__main__":

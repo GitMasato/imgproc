@@ -30,6 +30,7 @@
     "dsize",
     "fourcc",
     "hconcat",
+    "imghdr",
     "imgproc",
     "imread",
     "imshow",

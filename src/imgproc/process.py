@@ -1,6 +1,7 @@
 """process module containing image process functions
 """
 import cv2
+import imghdr
 import math
 import numpy
 import pathlib
@@ -129,21 +130,46 @@ def get_output_path(target_list: List[str], output: str) -> List[pathlib.Path]:
   return path_list
 
 
-def clean_output_directory(output_path_list: List[pathlib.Path]):
+def sort_target_type(target_list: List[str]) -> Tuple[List[str], List[str], List[str]]:
+  """get output path list
+
+  Args:
+      target_list (List[str]): list of pictures or movies or directories where pictures are stored
+
+  Returns:
+      Tuple[List[str], List[str], List[str]]: list of movies, pictures, and directories
+  """
+  movie_list: List[str] = []
+  picture_list: List[str] = []
+  directory_list: List[str] = []
+
+  for target in target_list:
+    target_path = pathlib.Path(target)
+
+    if target_path.is_dir():
+      directory_list.append(target)
+    elif target_path.is_file():
+      image_type = imghdr.what(target)
+      if image_type is not None:
+        picture_list.append(target)
+      else:
+        movie_list.append(target)
+
+  return (movie_list, picture_list, directory_list)
+
+
+def prepare_output_directory(output_directory_path: pathlib.Path):
   """clean output directory
 
   Args:
-      output_path_list (List[pathlib.Path]): list of output directories (pathlib.Path objects)
+      output_directory_path (pathlib.Path): output directory path
   """
-  output_path_group = set(output_path_list)
-
-  for output_path in output_path_group:
-    if not output_path.is_dir():
-      output_path.mkdir(parents=True)
-    else:
-      if list(output_path.iterdir()):
-        shutil.rmtree(output_path)
-        output_path.mkdir()
+  if not output_directory_path.is_dir():
+    output_directory_path.mkdir(parents=True)
+  else:
+    if list(output_directory_path.iterdir()):
+      shutil.rmtree(output_directory_path)
+      output_directory_path.mkdir()
 
 
 def no(no):
@@ -164,23 +190,23 @@ class AnimatingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     fps: Optional[float] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures, directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): whether to output in color. Defaults to False.
         fps (Optional[float], optional): fps of created movie. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__fps = fps
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -192,148 +218,197 @@ class AnimatingPicture:
     """animating process to create movie
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
+    pictures = self.get_target_list()
+    output_path_list = get_output_path(pictures, "animated")
+    W_list: List[int] = []
+    H_list: List[int] = []
+    name = (
+      str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).stem)) + ".mp4"
+    )
+
     if self.get_fps() is not None:
       fps = self.get_fps()
+    else:
+      fps = select_fps(name, pictures)
+    if fps is None:
+      return None
 
-    output_path_list = get_output_path(self.get_picture_list(), "animated")
-    clean_output_directory(output_path_list)
-    is_first_unprocessed = True
-    unprocessed_pictures: List[pathlib.Path] = []
-    return_list: List[str] = []
+    for picture in pictures:
+      img = cv2.imread(picture)
+      W_list.append(img.shape[1])
+      H_list.append(img.shape[0])
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    W = max(W_list)
+    H = max(H_list)
+    prepare_output_directory(output_path_list[0])
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    output = cv2.VideoWriter(name, fourcc, fps, (W, H), self.is_colored())
+    print("animating pictures...")
 
-      picture_path = pathlib.Path(picture)
+    for picture in pictures:
+      img = cv2.imread(picture)
+      img_show = numpy.zeros((H, W, 3), numpy.uint8)
+      img_show[: img.shape[1], : img.shape[1]] = img[:]
+      output.write(
+        img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
+      )
+    return [name]
 
-      if picture_path.is_file():
 
-        unprocessed_pictures.append(picture_path)
+class AnimatingPictureDirectory:
+  """class to create animation (movie) from pictures"""
 
-        if is_first_unprocessed is True:
-          img = cv2.imread(str(picture_path))
-          unprocessed_size = (int(img.shape[1]), int(img.shape[0]))
-          unprocessed_name = str(pathlib.Path(output_path / picture_path.stem)) + ".mp4"
-          return_list.append(unprocessed_name)
-          is_first_unprocessed = False
-
-      elif picture_path.is_dir():
-
-        print("animating pictures in '{0}'...".format(picture))
-        p_list = list(picture_path.iterdir())
-        if self.get_fps() is None:
-          fps = self.select_fps(picture_path.name, p_list)
-          if fps is None:
-            continue
-
-        img = cv2.imread(str(p_list[0]))
-        size = (int(img.shape[1]), int(img.shape[0]))
-        output_name = str(pathlib.Path(output_path / picture_path.name)) + ".mp4"
-        return_list.append(output_name)
-        fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-        output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
-
-        for p in p_list:
-          img = cv2.imread(str(p))
-          output.write(
-            img if self.is_colored() else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-          )
-
-    if unprocessed_pictures:
-
-      print("animating rest of pictures...")
-      if self.get_fps() is None:
-        fps = self.select_fps(unprocessed_name, unprocessed_pictures)
-        if fps:
-          fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-          unprocessed_output = cv2.VideoWriter(
-            unprocessed_name, fourcc, fps, unprocessed_size, self.is_colored()
-          )
-
-          for p in unprocessed_pictures:
-            img = cv2.imread(str(p))
-            unprocessed_output.write(
-              img if self.is_colored() else cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-            )
-
-    return ("movie", return_list) if return_list else (None, [])
-
-  def select_fps(
-    self, movie_name: str, picture_path_list: List[pathlib.Path]
-  ) -> Optional[float]:
-    """select(get) fps for animating using GUI window
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    fps: Optional[float] = None,
+  ):
+    """constructor
 
     Args:
-        movie_name (str): movie name
-        picture_path_list (List[pathlib.Path]): picture path list
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+        fps (Optional[float], optional): fps of created movie. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__fps = fps
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_fps(self) -> Optional[float]:
+    return self.__fps
+
+  def execute(self):
+    """animating process to create movie
 
     Returns:
-        Optional[float]: fps of movie
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    cv2.namedWindow(movie_name, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(movie_name, 500, 700)
-    help_exists = True
+    directories = self.get_target_list()
+    output_path_list = get_output_path(directories, "animated")
+    return_list: List[str] = []
 
-    frames = len(picture_path_list) - 1
-    division = 50
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", movie_name, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie_name, 0, tick_s, no)
-    cv2.createTrackbar("fps\n", movie_name, 10, 50, no)
+    for directory, output_path in zip(directories, output_path_list):
 
-    print("--- animate ---")
-    print("select fps in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+      W_list: List[int] = []
+      H_list: List[int] = []
 
-    while True:
-
-      frame = cv2.getTrackbarPos("frame\n", movie_name) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie_name)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
-      fps_read = cv2.getTrackbarPos("fps\n", movie_name)
-      fps = 1 if fps_read == 0 else fps_read
-      img = cv2.imread(str(picture_path_list[frame_now]))
-
-      if help_exists:
-        add_texts_upper_left(
-          img,
-          [
-            "[animate]",
-            "select fps",
-            "now: {0}".format(frame_now),
-            "fps: {0}".format(fps),
-          ],
-        )
-        add_texts_lower_right(
-          img, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
-
-      cv2.imshow(movie_name, img)
-      k = cv2.waitKey(1) & 0xFF
-
-      if k == ord("s"):
-        print("'s' is pressed. fps is saved ({0})".format(fps))
-        cv2.destroyAllWindows()
-        return fps
-
-      elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
+      if self.get_fps() is not None:
+        fps = self.get_fps()
+      else:
+        fps = select_fps(directory, p_list)
+      if fps is None:
         continue
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
+      for picture in p_list:
+        img = cv2.imread(picture)
+        W_list.append(img.shape[1])
+        H_list.append(img.shape[0])
 
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      W = max(W_list)
+      H = max(H_list)
+      output_name = str(pathlib.Path(output_path / directory_path.name)) + ".mp4"
+      return_list.append(output_name)
+      prepare_output_directory(output_path)
+      fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.is_colored())
+      print("animating pictures... in '{0}'".format(directory))
+
+      for picture in p_list:
+        img = cv2.imread(picture)
+        img_show = numpy.zeros((H, W, 3), numpy.uint8)
+        img_show[: img.shape[1], : img.shape[1]] = img[:]
+        output.write(
+          img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
+        )
+
+    return return_list if return_list else None
+
+
+def select_fps(
+  movie_name: str, picture_path_list: List[pathlib.Path]
+) -> Optional[float]:
+  """select(get) fps for animating using GUI window
+
+  Args:
+      movie_name (str): movie name
+      picture_path_list (List[pathlib.Path]): picture path list
+
+  Returns:
+      Optional[float]: fps of movie
+  """
+  cv2.namedWindow(movie_name, cv2.WINDOW_NORMAL)
+  cv2.resizeWindow(movie_name, 500, 700)
+  help_exists = True
+
+  frames = len(picture_path_list) - 1
+  division = 50
+  tick = division if division < frames else frames
+  tick_s = (int)(frames / division) + 1
+  cv2.createTrackbar("frame\n", movie_name, 0, tick - 1, no)
+  cv2.createTrackbar("frame s\n", movie_name, 0, tick_s, no)
+  cv2.createTrackbar("fps\n", movie_name, 10, 50, no)
+
+  print("--- animate ---")
+  print("select fps in GUI window!")
+  print("(s: save if selected, h:on/off help, q/esc: abort)")
+
+  while True:
+
+    frame = cv2.getTrackbarPos("frame\n", movie_name) * tick_s
+    frame_s = cv2.getTrackbarPos("frame s\n", movie_name)
+    frame_now = frame + frame_s if frame + frame_s < frames else frames
+    fps_read = cv2.getTrackbarPos("fps\n", movie_name)
+    fps = 1 if fps_read == 0 else fps_read
+    img = cv2.imread(str(picture_path_list[frame_now]))
+
+    if help_exists:
+      add_texts_upper_left(
+        img,
+        [
+          "[animate]",
+          "select fps",
+          "now: {0}".format(frame_now),
+          "fps: {0}".format(fps),
+        ],
+      )
+      add_texts_lower_right(img, ["s:save if selected", "h:on/off help", "q/esc:abort"])
+
+    cv2.imshow(movie_name, img)
+    k = cv2.waitKey(1) & 0xFF
+
+    if k == ord("s"):
+      print("'s' is pressed. fps is saved ({0})".format(fps))
+      cv2.destroyAllWindows()
+      return fps
+
+    elif k == ord("h"):
+      if help_exists:
+        help_exists = False
+      else:
+        help_exists = True
+      continue
+
+    elif k == ord("q"):
+      cv2.destroyAllWindows()
+      print("'q' is pressed. abort")
+      return None
+
+    elif k == 27:
+      cv2.destroyAllWindows()
+      print("'Esq' is pressed. abort")
+      return None
 
 
 class BinarizingMovie:
@@ -343,20 +418,20 @@ class BinarizingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     thresholds: Optional[Tuple[int, int]] = None,
   ):
     """constructor
 
     Args:
-        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        target_list (Optional[List[str]], optional): list of movies. Defaults to None.
         thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__thresholds = thresholds
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
@@ -365,21 +440,19 @@ class BinarizingMovie:
     """binarizing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
     if self.get_thresholds() is not None:
       thresholds = self.get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
-        return (None, [])
+        return None
 
-    output_path_list = get_output_path(self.get_movie_list(), "binarized")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "binarized")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
-      print("binarizing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_thresholds() is None:
@@ -390,8 +463,10 @@ class BinarizingMovie:
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
+      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, (int(W), int(H)), False)
+      print("binarizing movie '{0}'...".format(movie))
 
       while True:
         ret, frame = cap.read()
@@ -402,7 +477,7 @@ class BinarizingMovie:
         ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
         output.write(bin_2)
 
-    return ("movie", return_list) if return_list else (None, [])
+    return return_list if return_list else None
 
   def select_thresholds(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
@@ -500,20 +575,20 @@ class BinarizingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     thresholds: Optional[Tuple[int, int]] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures, directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__thresholds = thresholds
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
@@ -522,59 +597,39 @@ class BinarizingPicture:
     """binarizing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
     if self.get_thresholds() is not None:
       thresholds = self.get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
-        return (None, [])
+        return None
 
-    output_path_list = get_output_path(self.get_picture_list(), "binarized")
-    clean_output_directory(output_path_list)
+    pictures = self.get_target_list()
+    output_path_list = get_output_path(pictures, "binarized")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(pictures, output_path_list):
 
       picture_path = pathlib.Path(picture)
+      img = cv2.imread(picture)
+      gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+      if self.get_thresholds() is None:
+        thresholds = self.select_thresholds(picture, gray)
+        if thresholds is None:
+          continue
 
-      if picture_path.is_file():
+      print("binarizing picture '{0}'...".format(picture))
+      prepare_output_directory(output_path)
+      ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
+      ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
+      name = str(pathlib.Path(output_path / picture_path.name))
+      return_list.append(name)
+      cv2.imwrite(name, bin_2)
 
-        print("binarizing picture '{0}'...".format(picture))
-        img = cv2.imread(picture)
-        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-        if self.get_thresholds() is None:
-          thresholds = self.select_thresholds_picture(picture, gray)
-          if thresholds is None:
-            continue
+    return return_list if return_list else None
 
-        ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
-        ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
-        name = str(pathlib.Path(output_path / picture_path.name))
-        return_list.append(name)
-        cv2.imwrite(name, bin_2)
-
-      elif picture_path.is_dir():
-
-        print("binarizing picture in '{0}'...".format(picture))
-        p_list = list(picture_path.iterdir())
-        if self.get_thresholds() is None:
-          thresholds = self.select_thresholds_directory(picture_path.name, p_list)
-          if thresholds is None:
-            continue
-
-        return_list.append(str(output_path))
-
-        for p in p_list:
-          img = cv2.imread(str(p))
-          gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-          ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
-          ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
-          cv2.imwrite(str(pathlib.Path(output_path / p.name)), bin_2)
-
-    return ("picture", return_list) if return_list else (None, [])
-
-  def select_thresholds_picture(
+  def select_thresholds(
     self, picture: str, img: numpy.array
   ) -> Optional[Tuple[int, int]]:
     """select(get) threshold values for binarization using GUI window
@@ -638,14 +693,78 @@ class BinarizingPicture:
         print("'Esq' is pressed. abort")
         return None
 
-  def select_thresholds_directory(
-    self, directory: str, picture_path_list: List[pathlib.Path]
+
+class BinarizingPictureDirectory:
+  """class to binarize picture
+  """
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    thresholds: Optional[Tuple[int, int]] = None,
+  ):
+    """constructor
+
+    Args:
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize movie. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__thresholds = thresholds
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+    return self.__thresholds
+
+  def execute(self):
+    """binarizing process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
+    """
+    if self.get_thresholds() is not None:
+      thresholds = self.get_thresholds()
+      if thresholds[1] <= thresholds[0]:
+        print("high luminance threshold must be > low")
+        return (None, [])
+
+    directories = self.get_target_list()
+    output_path_list = get_output_path(directories, "binarized")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(directories, output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+      if self.get_thresholds() is None:
+        thresholds = self.select_thresholds(directory_path.name, p_list)
+        if thresholds is None:
+          continue
+
+      return_list.append(str(output_path))
+      prepare_output_directory(output_path)
+      print("binarizing picture in '{0}'...".format(directory))
+
+      for p in p_list:
+        img = cv2.imread(p)
+        gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+        ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
+        ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
+        cv2.imwrite(str(pathlib.Path(output_path / pathlib.Path(p).name)), bin_2)
+
+    return return_list if return_list else None
+
+  def select_thresholds(
+    self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[int, int]]:
     """select(get) threshold values for binarization using GUI window
 
     Args:
         directory (str): directory name
-        picture_path_list (List[pathlib.Path]): picture path list
+        picture_ist (List[str]): picture list
 
     Returns:
         Optional[Tuple[int, int]]: [low, high] threshold values
@@ -654,7 +773,7 @@ class BinarizingPicture:
     cv2.resizeWindow(directory, 500, 700)
     help_exists = True
 
-    frames = len(picture_path_list) - 1
+    frames = len(picture_list) - 1
     division = 50
     tick = division if division < frames else frames
     tick_s = (int)(frames / division) + 1
@@ -675,7 +794,7 @@ class BinarizingPicture:
       low = cv2.getTrackbarPos("low\n", directory)
       high = cv2.getTrackbarPos("high\n", directory)
 
-      img = cv2.imread(str(picture_path_list[frame_now]))
+      img = cv2.imread(picture_list[frame_now])
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
       ret, bin_1 = cv2.threshold(gray, low, 255, cv2.THRESH_TOZERO)
       ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
@@ -732,7 +851,7 @@ class CapturingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     times: Optional[Tuple[float, float, float]] = None,
   ):
@@ -743,12 +862,12 @@ class CapturingMovie:
         is_colored (bool, optional):  flag to output in color. Defaults to False.
         times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). If this variable is None, this will be selected using GUI window Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__times = times
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -760,28 +879,26 @@ class CapturingMovie:
     """capturing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (directory) path names
     """
     if self.get_times() is not None:
       time = self.get_times()
 
       if time[1] - time[0] <= time[2]:
         print("difference between stop and start must be > time step")
-        return (None, [])
+        return None
       if time[1] <= time[0]:
         print("stop must be > start")
-        return (None, [])
+        return None
       if time[2] < 0.001:
         print("time step must be > 0")
-        return (None, [])
+        return None
 
-    output_path_list = get_output_path(self.get_movie_list(), "captured")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "captured")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
-      print("capturing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_times() is None:
@@ -791,6 +908,8 @@ class CapturingMovie:
 
       capture_time = time[0]
       return_list.append(str(output_path))
+      prepare_output_directory(output_path)
+      print("capturing movie '{0}'...".format(movie))
 
       while capture_time <= time[1]:
 
@@ -804,7 +923,7 @@ class CapturingMovie:
         )
         capture_time += time[2]
 
-    return ("picture", return_list) if return_list else (None, [])
+    return return_list if return_list else None
 
   def select_times(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
@@ -919,23 +1038,23 @@ class ConcatenatingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     number: Optional[int] = None,
   ):
     """constructor
 
     Args:
-        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        target_list (Optional[List[str]], optional): list of movies. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
-        numbers (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
+        number (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__number = number
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -947,16 +1066,17 @@ class ConcatenatingMovie:
     """resizing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    movies = self.get_movie_list()
-    if 25 < len(movies):
-      print("'{0}' movies given. max is 25".format(len(movies)))
-      return (None, [])
-
+    movies = self.get_target_list()
     size_list: List[Tuple[int, int]] = []
     frame_list: List[int] = []
     fps_list: List[float] = []
+
+    if 25 < len(movies):
+      print("'{0}' movies given. max is 25".format(len(movies)))
+      return None
+
     for movie in movies:
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
@@ -974,17 +1094,16 @@ class ConcatenatingMovie:
     concat = self.get_concatenated_movie_frame(
       movies, frame_list, black_list, 0, number_x, number_y
     )
-    size = (concat.shape[1], concat.shape[0])
 
+    size = (concat.shape[1], concat.shape[0])
     movie_first = movies[0]
     output_path_list = get_output_path([movie_first], "concatenated")
-    clean_output_directory(output_path_list)
+    prepare_output_directory(output_path_list[0])
     output_name = (
       str(pathlib.Path(output_path_list[0] / pathlib.Path(movie_first).stem)) + ".mp4"
     )
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
     output = cv2.VideoWriter(output_name, fourcc, fps_list[0], size, self.is_colored())
-    return_list: List[str] = [output_name]
     print("concatenating movie '{0}'...".format(output_name))
 
     for frame in range(max(frame_list) + 1):
@@ -994,8 +1113,7 @@ class ConcatenatingMovie:
       output.write(
         concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY)
       )
-
-    return ("concatenate", return_list) if return_list else (None, [])
+    return [output_name]
 
   def select_number(
     self,
@@ -1129,23 +1247,23 @@ class ConcatenatingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     number: Optional[int] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures. directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
-        numbers (Optional[int], optional):  number of pictures concatenated in x direction. Defaults to None.
+        numbers (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__number = number
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -1157,174 +1275,200 @@ class ConcatenatingPicture:
     """concatenating process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    return_list: List[str] = []
-    pictures = []
-    direcotry_path_list = []
-    for target in self.get_picture_list():
-      target_path = pathlib.Path(target)
-      if target_path.is_file():
-        pictures.append(str(target_path))
-      if target_path.is_dir():
-        direcotry_path_list.append(target_path)
+    pictures = self.get_target_list()
+    size_list = []
 
-    if pictures:
+    if 25 < len(pictures):
+      print("'{0}' pictures given. max is 25".format(len(pictures)))
+      return None
 
-      if 25 < len(pictures):
-        print("'{0}' pictures given. max is 25".format(len(pictures)))
-        return (None, [])
+    for picture in pictures:
+      img = cv2.imread(picture)
+      size_list.append((img.shape[1], img.shape[0]))
 
+    if self.get_number() is not None:
+      number_x = self.get_number()
+    else:
+      number_x = select_number(pictures, size_list)
+
+    output_path_list = get_output_path([pictures[0]], "concatenated")
+    prepare_output_directory(output_path_list[0])
+    name = str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).name))
+
+    print("concatenating picture '{0}'...".format(name))
+    number_y = math.ceil(len(pictures) / number_x)
+    concat = get_concatenated_pictures(pictures, number_x, number_y)
+    cv2.imwrite(
+      name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
+    )
+
+    return [name]
+
+
+class ConcatenatingPictureDirectory:
+  """class to concatenate picture"""
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    number: Optional[int] = None,
+  ):
+    """constructor
+
+    Args:
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        numbers (Optional[int], optional):  number of pictures concatenated in x direction. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__number = number
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_number(self) -> Optional[int]:
+    return self.__number
+
+  def execute(self):
+    """concatenating process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
+    """
+    directories = self.get_target_list()
+    output_path_list = get_output_path(directories, "concatenated")
+
+    for idx, direcotry in enumerate(directories):
+
+      directory_path = pathlib.Path(direcotry)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
       size_list = []
-      for picture in pictures:
-        img = cv2.imread(picture)
+
+      if 25 < len(p_list):
+        print("'{0}' pictures given. max is 25".format(len(p_list)))
+        continue
+
+      for p in p_list:
+        img = cv2.imread(p)
         size_list.append((img.shape[1], img.shape[0]))
 
       if self.get_number() is not None:
         number_x = self.get_number()
       else:
-        number_x = self.select_number(pictures, size_list)
+        number_x = select_number(p_list, size_list)
 
-      output_path_list = get_output_path([pictures[0]], "concatenated")
-      clean_output_directory(output_path_list)
-      name = str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).name))
-
-      print("concatenating picture '{0}'...".format(name))
-      number_y = math.ceil(len(pictures) / number_x)
-      concat = self.get_concatenated_pictures(pictures, number_x, number_y)
-      return_list.append(name)
+      print("concatenating pictures in '{0}'...".format(direcotry))
+      prepare_output_directory(output_path_list[0])
+      number_y = math.ceil(len(p_list) / number_x)
+      concat = get_concatenated_pictures(p_list, number_x, number_y)
+      file_name = directory_path.name + pathlib.Path(p_list[0]).suffix
+      name = str(pathlib.Path(output_path_list[idx] / file_name))
       cv2.imwrite(
         name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
       )
 
-    if direcotry_path_list:
+    return [name]
 
-      output_path_list = get_output_path(
-        [str(direcotry_path) for direcotry_path in direcotry_path_list], "concatenated"
+
+def select_number(
+  picture_list: List[str], size_list: List[Tuple[int, int]],
+) -> Optional[int]:
+  """select(get) number of concatenating pictures in x direction using GUI window
+
+  Args:
+      picture_list (List[str]): picture list
+      size_list (List[Tuple[int, int]]): list of picture size
+
+  Returns:
+      Optional[int]: number of pictures concatenated in x direction
+  """
+  window = picture_list[0]
+  cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+  cv2.resizeWindow(window, 500, 700)
+  help_exists = True
+  cv2.createTrackbar("x\n", window, 1, 5, no)
+  print("--- concatenate ---")
+  print("select number in GUI window!")
+  print("(s: save if selected, h:on/off help, q/esc: abort)")
+
+  while True:
+
+    number_x = cv2.getTrackbarPos("x\n", window)
+    if number_x == 0:
+      number_x = 1
+    elif len(picture_list) < number_x:
+      number_x = len(picture_list)
+    number_y = math.ceil(len(picture_list) / number_x)
+    concat = get_concatenated_pictures(picture_list, number_x, number_y)
+
+    if help_exists:
+      add_texts_upper_left(
+        concat, ["[concatenate]", "select x"],
       )
-      clean_output_directory(output_path_list)
+      add_texts_lower_right(
+        concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
+      )
+    cv2.imshow(window, concat)
+    k = cv2.waitKey(1) & 0xFF
 
-      for idx, direcotry_path in enumerate(direcotry_path_list):
+    if k == ord("s"):
+      print("'s' is pressed. number is saved ({0})".format(number_x))
+      cv2.destroyAllWindows()
+      return number_x
 
-        p_list = [str(p) for p in list(direcotry_path.iterdir())]
-        if 25 < len(p_list):
-          print("'{0}' pictures given. max is 25".format(len(p_list)))
-          return (None, [])
+    elif k == ord("h"):
+      if help_exists:
+        help_exists = False
+      else:
+        help_exists = True
+      continue
 
-        size_list = []
-        for p in p_list:
-          img = cv2.imread(p)
-          size_list.append((img.shape[1], img.shape[0]))
+    elif k == ord("q"):
+      cv2.destroyAllWindows()
+      print("'q' is pressed. abort")
+      return None
 
-        if self.get_number() is not None:
-          number_x = self.get_number()
-        else:
-          number_x = self.select_number(p_list, size_list)
+    elif k == 27:
+      cv2.destroyAllWindows()
+      print("'Esq' is pressed. abort")
+      return None
 
-        print("concatenating pictures in '{0}'...".format(str(direcotry_path)))
-        number_y = math.ceil(len(p_list) / number_x)
-        concat = self.get_concatenated_pictures(p_list, number_x, number_y)
 
-        file_name = direcotry_path.name + pathlib.Path(p_list[0]).suffix
-        name = str(pathlib.Path(output_path_list[idx] / file_name))
-        return_list.append(name)
-        cv2.imwrite(
-          name,
-          concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
-        )
-
-    return ("picture", return_list) if return_list else (None, [])
-
-  def select_number(
-    self, picture_list: List[str], size_list: List[Tuple[int, int]],
-  ) -> Optional[int]:
-    """select(get) number of concatenating using GUI window
+def get_concatenated_pictures(
+  picture_list: List[str], number_x: int, number_y: int,
+) -> numpy.array:
+  """get concatenated frame of movie
 
     Args:
-        picture_list (List[str]): picture list
-        size_list (List[Tuple[int, int]]): list of picture size
+        picture_list (List[str]): list of pictures
+        number_x (int): number of movies concatenated in x direction
+        number_y (int): number of movies concatenated in x direction
 
     Returns:
-        Optional[int]: number of pictures concatenated in x direction
+        numpy.array: concatenated image
     """
-    window = picture_list[0]
-    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
-    cv2.resizeWindow(window, 500, 700)
-    help_exists = True
-    cv2.createTrackbar("x\n", window, 1, 5, no)
-    print("--- concatenate ---")
-    print("select number in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+  pic_list = []
+  for idx, picture in enumerate(picture_list):
+    pic_list.append(cv2.imread(picture))
 
-    while True:
+  for a in range(number_x * number_y - len(picture_list)):
+    pic_list.append(
+      numpy.zeros((pic_list[0].shape[0], pic_list[0].shape[1], 3), numpy.uint8)
+    )
 
-      number_x = cv2.getTrackbarPos("x\n", window)
-      if number_x == 0:
-        number_x = 1
-      elif len(picture_list) < number_x:
-        number_x = len(picture_list)
-      number_y = math.ceil(len(picture_list) / number_x)
-      concat = self.get_concatenated_pictures(picture_list, number_x, number_y)
-
-      if help_exists:
-        add_texts_upper_left(
-          concat, ["[concatenate]", "select x"],
-        )
-        add_texts_lower_right(
-          concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
-      cv2.imshow(window, concat)
-      k = cv2.waitKey(1) & 0xFF
-
-      if k == ord("s"):
-        print("'s' is pressed. number is saved ({0})".format(number_x))
-        cv2.destroyAllWindows()
-        return number_x
-
-      elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
-
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
-
-  def get_concatenated_pictures(
-    self, picture_list: List[str], number_x: int, number_y: int,
-  ) -> numpy.array:
-    """get concatenated frame of movie
-
-      Args:
-          picture_list (List[str]): list of pictures
-          number_x (int): number of movies concatenated in x direction
-          number_y (int): number of movies concatenated in x direction
-
-      Returns:
-          numpy.array: concatenated image
-      """
-    pic_list = []
-    for idx, picture in enumerate(picture_list):
-      pic_list.append(cv2.imread(picture))
-
-    for a in range(number_x * number_y - len(picture_list)):
-      pic_list.append(
-        numpy.zeros((pic_list[0].shape[0], pic_list[0].shape[1], 3), numpy.uint8)
-      )
-
-    multi_list = [
-      pic_list[y * number_x : y * number_x + number_x] for y in range(number_y)
-    ]
-    concat_W = [vconcat_W(one_list, pic_list[0].shape[0]) for one_list in multi_list]
-    return vconcat_H(concat_W, concat_W[0].shape[1])
+  multi_list = [
+    pic_list[y * number_x : y * number_x + number_x] for y in range(number_y)
+  ]
+  concat_W = [vconcat_W(one_list, pic_list[0].shape[0]) for one_list in multi_list]
+  return vconcat_H(concat_W, concat_W[0].shape[1])
 
 
 def vconcat_H(image_list: List[numpy.array], W: int) -> numpy.array:
@@ -1371,23 +1515,23 @@ class CroppingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     positions: Optional[Tuple[int, int, int, int]] = None,
   ):
     """constructor
 
     Args:
-        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        target_list (Optional[List[str]], optional): list of movies. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__positions = positions
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -1399,21 +1543,19 @@ class CroppingMovie:
     """capturing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
     if self.get_positions() is not None:
       positions = self.get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be > 1st")
-        return (None, [])
+        return None
 
-    output_path_list = get_output_path(self.get_movie_list(), "cropped")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "cropped")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
-      print("cropping movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_positions() is None:
@@ -1425,8 +1567,10 @@ class CroppingMovie:
       size = (int(positions[2] - positions[0]), int(positions[3] - positions[1]))
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
+      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
+      print("cropping movie '{0}'...".format(movie))
 
       while True:
         ret, frame = cap.read()
@@ -1437,7 +1581,7 @@ class CroppingMovie:
           cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
         )
 
-    return ("movie", return_list) if return_list else (None, [])
+    return return_list if return_list else None
 
   def select_positions(
     self, movie: str, W: int, H: int, frames: int, fps: float, cap: cv2.VideoCapture,
@@ -1468,7 +1612,7 @@ class CroppingMovie:
     points: List[Tuple[int, int]] = []
     warning_message: List[str] = []
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(movie, self.mouse_on_select_positions, points)
+    cv2.setMouseCallback(movie, mouse_on_select_positions, points)
     line_color = (255, 255, 255)
 
     print("--- crop ---")
@@ -1566,14 +1710,6 @@ class CroppingMovie:
         print("'Esq' is pressed. abort")
         return None
 
-  def mouse_on_select_positions(self, event, x, y, flags, params):
-    """call back function on mouse click
-    """
-    points = params
-
-    if event == cv2.EVENT_LBUTTONUP:
-      points.append([x, y])
-
 
 class CroppingPicture:
   """class to capture picture"""
@@ -1581,23 +1717,23 @@ class CroppingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     positions: Optional[Tuple[int, int, int, int]] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures, directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__positions = positions
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -1609,61 +1745,38 @@ class CroppingPicture:
     """cropping process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
     if self.get_positions() is not None:
       positions = self.get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be larger than 1st")
-        return ("picture", [])
+        return None
 
-    output_path_list = get_output_path(self.get_picture_list(), "cropped")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "cropped")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
-      picture_path = pathlib.Path(picture)
+      img = cv2.imread(picture)
+      if self.get_positions() is None:
+        positions = self.select_positions(picture, img)
+        if positions is None:
+          continue
 
-      if picture_path.is_file():
+      print("cropping picture '{0}'...".format(picture))
+      prepare_output_directory(output_path)
+      cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
+      return_list.append(name)
+      cv2.imwrite(
+        name,
+        cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
+      )
 
-        print("cropping picture '{0}'...".format(picture))
-        img = cv2.imread(picture)
-        if self.get_positions() is None:
-          positions = self.select_positions_picture(picture, img)
-          if positions is None:
-            continue
+    return return_list if return_list else None
 
-        cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
-        name = str(pathlib.Path(output_path / picture_path.name))
-        return_list.append(name)
-        cv2.imwrite(
-          name,
-          cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
-        )
-
-      elif picture_path.is_dir():
-
-        print("cropping picture in '{0}'...".format(picture))
-        p_list = list(picture_path.iterdir())
-        if self.get_positions() is None:
-          positions = self.select_positions_directory(picture_path.name, p_list)
-          if positions is None:
-            continue
-
-        return_list.append(str(output_path))
-
-        for p in p_list:
-          img = cv2.imread(str(p))
-          cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
-          cv2.imwrite(
-            str(pathlib.Path(output_path / p.name)),
-            cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
-          )
-
-    return ("picture", return_list) if return_list else (None, [])
-
-  def select_positions_picture(
+  def select_positions(
     self, picture: str, img: numpy.array
   ) -> Optional[Tuple[int, int, int, int]]:
     """select(get) two positions for capring process using GUI window
@@ -1680,7 +1793,7 @@ class CroppingPicture:
     warning_message: List[str] = []
 
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
-    cv2.setMouseCallback(picture, self.mouse_on_select_positions, points)
+    cv2.setMouseCallback(picture, mouse_on_select_positions, points)
     help_exists = True
     line_color = (255, 255, 255)
 
@@ -1774,14 +1887,83 @@ class CroppingPicture:
         print("'Esq' is pressed. abort")
         return None
 
-  def select_positions_directory(
-    self, directory: str, picture_path_list: List[pathlib.Path]
+
+class CroppingPictureDirectory:
+  """class to capture picture"""
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    positions: Optional[Tuple[int, int, int, int]] = None,
+  ):
+    """constructor
+
+    Args:
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__positions = positions
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+    return self.__positions
+
+  def execute(self):
+    """cropping process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
+    """
+    if self.get_positions() is not None:
+      positions = self.get_positions()
+      if positions[2] <= positions[0] or positions[3] <= positions[1]:
+        print("2nd position must be larger than 1st")
+        return None
+
+    output_path_list = get_output_path(self.get_target_list(), "cropped")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(self.get_target_list(), output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+      if self.get_positions() is None:
+        positions = self.select_positions(directory, p_list)
+        if positions is None:
+          continue
+
+      return_list.append(str(output_path))
+      prepare_output_directory(output_path)
+      print("cropping picture in '{0}'...".format(directory))
+
+      for p in p_list:
+        img = cv2.imread(p)
+        cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
+        cv2.imwrite(
+          str(pathlib.Path(output_path / pathlib.Path(p).name)),
+          cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
+        )
+
+    return return_list if return_list else None
+
+  def select_positions(
+    self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[int, int, int, int]]:
     """select(get) two positions for capring process using GUI window
 
     Args:
         directory (str): directory name
-        picture_path_list (List[pathlib.Path]): picture path list
+        picture_list (List[str]): picture list
 
     Returns:
         Optional[Tuple[int, int, int, int]]: [x_1, y_1,x_2, y_2] two positions to crop image
@@ -1790,7 +1972,7 @@ class CroppingPicture:
     cv2.resizeWindow(directory, 500, 700)
     help_exists = True
 
-    frames = len(picture_path_list) - 1
+    frames = len(picture_list) - 1
     division = 50
     tick = division if division < frames else frames
     tick_s = (int)(frames / division) + 1
@@ -1799,7 +1981,7 @@ class CroppingPicture:
 
     points: List[Tuple[int, int]] = []
     warning_message: List[str] = []
-    cv2.setMouseCallback(directory, self.mouse_on_select_positions, points)
+    cv2.setMouseCallback(directory, mouse_on_select_positions, points)
     line_color = (255, 255, 255)
 
     print("--- crop ---")
@@ -1811,7 +1993,7 @@ class CroppingPicture:
       frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
       frame_s = cv2.getTrackbarPos("frame s\n", directory)
       frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(str(picture_path_list[frame_now]))
+      img = cv2.imread(picture_list[frame_now])
       W, H = img.shape[1], img.shape[0]
 
       if len(points) == 1:
@@ -1896,32 +2078,33 @@ class CroppingPicture:
         print("'Esq' is pressed. abort")
         return None
 
-  def mouse_on_select_positions(self, event, x, y, flags, params):
-    """call back function on mouse click
-    """
-    points = params
 
-    if event == cv2.EVENT_LBUTTONUP:
-      points.append([x, y])
+def mouse_on_select_positions(event, x, y, flags, params):
+  """call back function on mouse click
+  """
+  points = params
+
+  if event == cv2.EVENT_LBUTTONUP:
+    points.append([x, y])
 
 
 class CreatingLuminanceHistgramPicture:
   """class to create luminance histgram of picture"""
 
   def __init__(
-    self, *, picture_list: Optional[List[str]] = None, is_colored: bool = False
+    self, *, target_list: Optional[List[str]] = None, is_colored: bool = False
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures, directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -1930,74 +2113,115 @@ class CreatingLuminanceHistgramPicture:
     """creating luminance histglam
 
     Returns:
-        Tuple[None, List[]]: None, []
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    output_path_list = get_output_path(self.get_picture_list(), "histgram_luminance")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "histgram_luminance")
+    return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
-      picture_path = pathlib.Path(picture)
+      print("creating luminance histgram of picture '{0}'...".format(picture))
+      prepare_output_directory(output_path)
+      return_list.append(str(pathlib.Path(output_path / pathlib.Path(picture).name)))
 
-      if picture_path.is_file():
+      if self.is_colored():
+        create_color_figure(picture, output_path)
+      else:
+        create_gray_figure(picture, output_path)
 
-        print("creating luminance histgram of picture '{0}'...".format(picture))
-        if self.is_colored():
-          self.create_color_figure(picture_path, output_path)
-        else:
-          self.create_gray_figure(picture_path, output_path)
+    return return_list if return_list else None
 
-      elif picture_path.is_dir():
 
-        print("creating luminance histgram of picture in '{0}'...".format(picture))
-        if self.is_colored():
-          for p in list(picture_path.iterdir()):
-            self.create_color_figure(p, output_path)
-        else:
-          for p in list(picture_path.iterdir()):
-            self.create_gray_figure(p, output_path)
+class CreatingLuminanceHistgramPictureDirectory:
+  """class to create luminance histgram of picture"""
 
-    return (None, [])
-
-  def create_color_figure(self, picture_path: pathlib.Path, output_path: pathlib.Path):
-    """create output figure in color
+  def __init__(
+    self, *, target_list: Optional[List[str]] = None, is_colored: bool = False
+  ):
+    """constructor
 
     Args:
-        picture_path (pathlib.Path): picture (pathlib.Path) object
-        output_path (pathlib.Path): output directory (pathlib.Path) object
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
     """
-    img = cv2.imread(str(picture_path))
-    rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
-    fig = pyplot.figure()
-    subplot = fig.add_subplot(2, 2, 1)
-    subplot.imshow(rgb)
-    subplot.axis("off")
-    subplot = fig.add_subplot(2, 2, 2)
-    subplot.hist(rgb[:, :, 0].flatten(), bins=numpy.arange(256 + 1), color="r")
-    subplot = fig.add_subplot(2, 2, 3)
-    subplot.hist(rgb[:, :, 1].flatten(), bins=numpy.arange(256 + 1), color="g")
-    subplot = fig.add_subplot(2, 2, 4)
-    subplot.hist(rgb[:, :, 2].flatten(), bins=numpy.arange(256 + 1), color="b")
-    fig.savefig(str(pathlib.Path(output_path / picture_path.name)))
-    pyplot.close(fig)
+    self.__target_list = target_list
+    self.__is_colored = is_colored
 
-  def create_gray_figure(self, picture_path: pathlib.Path, output_path: pathlib.Path):
-    """create output figure in gray
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
-    Args:
-        picture_path (pathlib.Path): picture (pathlib.Path) object
-        output_path (pathlib.Path): output directory (pathlib.Path) object
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def execute(self):
+    """creating luminance histglam
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    img = cv2.imread(str(picture_path))
-    gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
-    fig = pyplot.figure()
-    subplot = fig.add_subplot(1, 2, 1)
-    subplot.imshow(gray, cmap="gray")
-    subplot.axis("off")
-    subplot = fig.add_subplot(1, 2, 2)
-    subplot.hist(gray.flatten(), bins=numpy.arange(256 + 1))
-    fig.savefig(str(pathlib.Path(output_path / picture_path.name)))
-    pyplot.close(fig)
+    output_path_list = get_output_path(self.get_target_list(), "histgram_luminance")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(self.get_target_list(), output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+
+      if p_list:
+        return_list.append(str(output_path))
+        prepare_output_directory(output_path)
+        print("creating luminance histgram of picture in '{0}'...".format(directory))
+
+        if self.is_colored():
+          for p in p_list:
+            create_color_figure(p, output_path)
+        else:
+          for p in p_list:
+            create_gray_figure(p, output_path)
+
+    return return_list if return_list else None
+
+
+def create_color_figure(picture: str, output_path: pathlib.Path):
+  """create output figure in color
+
+  Args:
+      picture (str): picture name
+      output_path (pathlib.Path): output directory (pathlib.Path) object
+  """
+  img = cv2.imread(picture)
+  rgb = cv2.cvtColor(img, cv2.COLOR_BGR2RGB)
+  fig = pyplot.figure()
+  subplot = fig.add_subplot(2, 2, 1)
+  subplot.imshow(rgb)
+  subplot.axis("off")
+  subplot = fig.add_subplot(2, 2, 2)
+  subplot.hist(rgb[:, :, 0].flatten(), bins=numpy.arange(256 + 1), color="r")
+  subplot = fig.add_subplot(2, 2, 3)
+  subplot.hist(rgb[:, :, 1].flatten(), bins=numpy.arange(256 + 1), color="g")
+  subplot = fig.add_subplot(2, 2, 4)
+  subplot.hist(rgb[:, :, 2].flatten(), bins=numpy.arange(256 + 1), color="b")
+  fig.savefig(str(pathlib.Path(output_path / pathlib.Path(picture).name)))
+  pyplot.close(fig)
+
+
+def create_gray_figure(picture: str, output_path: pathlib.Path):
+  """create output figure in gray
+
+  Args:
+      picture (str): picture name
+      output_path (pathlib.Path): output directory (pathlib.Path) object
+  """
+  img = cv2.imread(picture)
+  gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+  fig = pyplot.figure()
+  subplot = fig.add_subplot(1, 2, 1)
+  subplot.imshow(gray, cmap="gray")
+  subplot.axis("off")
+  subplot = fig.add_subplot(1, 2, 2)
+  subplot.hist(gray.flatten(), bins=numpy.arange(256 + 1))
+  fig.savefig(str(pathlib.Path(output_path / pathlib.Path(picture).name)))
+  pyplot.close(fig)
 
 
 class ResizingMovie:
@@ -2006,23 +2230,23 @@ class ResizingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     scales: Optional[Tuple[float, float]] = None,
   ):
     """constructor
 
     Args:
-        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        target_list (Optional[List[str]], optional): list of movies. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__scales = scales
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -2034,30 +2258,31 @@ class ResizingMovie:
     """resizing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    if self.get_scales() is not None:
-      scales = self.get_scales()
-
-    output_path_list = get_output_path(self.get_movie_list(), "resized")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "resized")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
-      print("resizing movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
-      if self.get_scales() is None:
-        scales = self.select_scales(movie, W, H, frames, fps, cap)
-        if scales is None:
-          continue
 
+      if self.get_scales() is not None:
+        scales = self.get_scales()
+      else:
+        scales = self.select_scales(movie, W, H, frames, fps, cap)
+      if scales is None:
+        continue
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(W * scales[0]), int(H * scales[1]))
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
+      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
+      print("resizing movie '{0}'...".format(movie))
 
       while True:
         ret, frame = cap.read()
@@ -2068,7 +2293,7 @@ class ResizingMovie:
           resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
         )
 
-    return ("movie", return_list) if return_list else (None, [])
+    return return_list if return_list else None
 
   def select_scales(
     self, movie: str, W: int, H: int, frames: int, fps: float, cap: cv2.VideoCapture
@@ -2169,23 +2394,23 @@ class ResizingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     scales: Optional[Tuple[float, float]] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures. directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): flag to output in color. Defaults to False.
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__scales = scales
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -2197,60 +2422,36 @@ class ResizingPicture:
     """resizing process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_scales() is not None:
-      scales = self.get_scales()
-
-    output_path_list = get_output_path(self.get_picture_list(), "resized")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "resized")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
-      picture_path = pathlib.Path(picture)
+      img = cv2.imread(picture)
+      W, H = img.shape[1], img.shape[0]
 
-      if picture_path.is_file():
+      if self.get_scales() is not None:
+        scales = self.get_scales()
+      else:
+        scales = self.select_scales(picture, img, W, H)
+      if scales is None:
+        continue
 
-        print("resizing picture '{0}'...".format(picture))
-        img = cv2.imread(picture)
-        W, H = img.shape[1], img.shape[0]
-        if self.get_scales() is None:
-          scales = self.select_scales_picture(picture, img, W, H)
-          if scales is None:
-            continue
+      print("resizing picture '{0}'...".format(picture))
+      prepare_output_directory(output_path)
+      resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
+      return_list.append(name)
+      cv2.imwrite(
+        name,
+        resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
+      )
 
-        resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
-        name = str(pathlib.Path(output_path / picture_path.name))
-        return_list.append(name)
-        cv2.imwrite(
-          name,
-          resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
-        )
+    return return_list if return_list else None
 
-      elif picture_path.is_dir():
-
-        print("resizing picture in '{0}'...".format(picture))
-        p_list = list(picture_path.iterdir())
-        if self.get_scales() is None:
-          scales = self.select_scales_directory(picture_path.name, p_list)
-          if scales is None:
-            continue
-
-        return_list.append(str(output_path))
-
-        for p in p_list:
-          img = cv2.imread(str(p))
-          W, H = img.shape[1], img.shape[0]
-          resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
-          cv2.imwrite(
-            str(pathlib.Path(output_path / p.name)),
-            resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
-          )
-
-    return ("picture", return_list) if return_list else (None, [])
-
-  def select_scales_picture(
+  def select_scales(
     self, picture: str, img: numpy.array, W: int, H: int
   ) -> Optional[Tuple[float, float]]:
     """select(get) resizing scales using GUI window
@@ -2322,14 +2523,81 @@ class ResizingPicture:
         print("'Esq' is pressed. abort")
         return None
 
-  def select_scales_directory(
-    self, directory: str, picture_path_list: List[pathlib.Path]
+
+class ResizingPictureDirectory:
+  """class to resize picture"""
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    scales: Optional[Tuple[float, float]] = None,
+  ):
+    """constructor
+
+    Args:
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__scales = scales
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_scales(self) -> Optional[Tuple[float, float]]:
+    return self.__scales
+
+  def execute(self):
+    """resizing process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
+    """
+    output_path_list = get_output_path(self.get_target_list(), "resized")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(self.get_target_list(), output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+
+      if self.get_scales() is not None:
+        scales = self.get_scales()
+      else:
+        scales = self.select_scales(directory_path.name, p_list)
+      if scales is None:
+        continue
+
+      return_list.append(str(output_path))
+      prepare_output_directory(output_path)
+      print("resizing picture in '{0}'...".format(directory))
+
+      for p in p_list:
+        img = cv2.imread(p)
+        W, H = img.shape[1], img.shape[0]
+        resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
+        cv2.imwrite(
+          str(pathlib.Path(output_path / pathlib.Path(p).name)),
+          resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
+        )
+
+    return return_list if return_list else None
+
+  def select_scales(
+    self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[float, float]]:
     """select(get) resizing scales using GUI window
 
     Args:
         directory (str): directory name
-        picture_path_list (List[pathlib.Path]): picture path list
+        picture_list (List[str]): picture list
 
     Returns:
         Optional[float]: [x, y] ratios to scale movie
@@ -2338,7 +2606,7 @@ class ResizingPicture:
     cv2.resizeWindow(directory, 500, 700)
     help_exists = True
 
-    frames = len(picture_path_list) - 1
+    frames = len(picture_list) - 1
     division = 50
     tick = division if division < frames else frames
     tick_s = (int)(frames / division) + 1
@@ -2359,7 +2627,7 @@ class ResizingPicture:
       frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
       frame_s = cv2.getTrackbarPos("frame s\n", directory)
       frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(str(picture_path_list[frame_now]))
+      img = cv2.imread(picture_list[frame_now])
       W, H = img.shape[1], img.shape[0]
 
       s_x_01 = cv2.getTrackbarPos("scale x\n*0.1", directory)
@@ -2418,23 +2686,23 @@ class RotatingMovie:
   def __init__(
     self,
     *,
-    movie_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     degree: Optional[float] = None,
   ):
     """constructor
 
     Args:
-        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        target_list (Optional[List[str]], optional): list of movies. Defaults to None.
         is_colored (bool, optional): [description]. flag to output in color to False.
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
-    self.__movie_list = movie_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__degree = degree
 
-  def get_movie_list(self) -> Optional[List[str]]:
-    return self.__movie_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -2446,7 +2714,7 @@ class RotatingMovie:
     """rotating process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (movie) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
     if self.get_degree() is not None:
       degree = self.get_degree()
@@ -2454,15 +2722,14 @@ class RotatingMovie:
       sin_rad = numpy.absolute(numpy.sin(rad))
       cos_rad = numpy.absolute(numpy.cos(rad))
 
-    output_path_list = get_output_path(self.get_movie_list(), "rotated")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "rotated")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_movie_list(), output_path_list):
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
 
-      print("rotating movie '{0}'...".format(movie))
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
+
       if self.get_degree() is None:
         degree = self.select_degree(movie, frames, fps, cap)
         if degree is None:
@@ -2483,8 +2750,10 @@ class RotatingMovie:
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
+      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, size_rot, self.is_colored())
+      print("rotating movie '{0}'...".format(movie))
 
       while True:
         ret, frame = cap.read()
@@ -2495,7 +2764,7 @@ class RotatingMovie:
           rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
         )
 
-    return ("movie", return_list) if return_list else (None, [])
+    return return_list if return_list else None
 
   def select_degree(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
@@ -2593,23 +2862,23 @@ class RotatingPicture:
   def __init__(
     self,
     *,
-    picture_list: Optional[List[str]] = None,
+    target_list: Optional[List[str]] = None,
     is_colored: bool = False,
     degree: Optional[float] = None,
   ):
     """constructor
 
     Args:
-        picture_list (Optional[List[str]], optional): list of pictures, directories where pictures are stored. Defaults to None.
+        target_list (Optional[List[str]], optional): list of pictures. Defaults to None.
         is_colored (bool, optional): [description]. flag to output in color to False.
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
-    self.__picture_list = picture_list
+    self.__target_list = target_list
     self.__is_colored = is_colored
     self.__degree = degree
 
-  def get_picture_list(self) -> Optional[List[str]]:
-    return self.__picture_list
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
 
   def is_colored(self) -> bool:
     return self.__is_colored
@@ -2621,7 +2890,7 @@ class RotatingPicture:
     """rotating process
 
     Returns:
-        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
     if self.get_degree() is not None:
       degree = self.get_degree()
@@ -2629,60 +2898,33 @@ class RotatingPicture:
       sin_rad = numpy.absolute(numpy.sin(rad))
       cos_rad = numpy.absolute(numpy.cos(rad))
 
-    output_path_list = get_output_path(self.get_picture_list(), "rotated")
-    clean_output_directory(output_path_list)
+    output_path_list = get_output_path(self.get_target_list(), "rotated")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_picture_list(), output_path_list):
+    for picture, output_path in zip(self.get_target_list(), output_path_list):
 
-      picture_path = pathlib.Path(picture)
+      img = cv2.imread(picture)
+      if self.get_degree() is None:
+        degree = self.select_degree(picture, img)
+        if degree is None:
+          continue
+        rad = degree / 180.0 * numpy.pi
+        sin_rad = numpy.absolute(numpy.sin(rad))
+        cos_rad = numpy.absolute(numpy.cos(rad))
 
-      if picture_path.is_file():
+      print("rotating picture '{0}'...".format(picture))
+      prepare_output_directory(output_path)
+      rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
+      return_list.append(name)
+      cv2.imwrite(
+        name,
+        rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
+      )
 
-        img = cv2.imread(picture)
-        if self.get_degree() is None:
-          degree = self.select_degree_picture(picture, img)
-          if degree is None:
-            continue
-          rad = degree / 180.0 * numpy.pi
-          sin_rad = numpy.absolute(numpy.sin(rad))
-          cos_rad = numpy.absolute(numpy.cos(rad))
+    return return_list if return_list else None
 
-        print("rotating picture '{0}'...".format(picture))
-        rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
-        name = str(pathlib.Path(output_path / picture_path.name))
-        return_list.append(name)
-        cv2.imwrite(
-          name,
-          rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
-        )
-
-      elif picture_path.is_dir():
-
-        print("rotating picture in '{0}'...".format(picture))
-        p_list = list(picture_path.iterdir())
-
-        if self.get_degree() is None:
-          degree = self.select_degree_directory(picture_path.name, p_list)
-          if degree is None:
-            continue
-          rad = degree / 180.0 * numpy.pi
-          sin_rad = numpy.absolute(numpy.sin(rad))
-          cos_rad = numpy.absolute(numpy.cos(rad))
-
-        return_list.append(str(output_path))
-
-        for p in list(picture_path.iterdir()):
-          img = cv2.imread(str(p))
-          rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
-          cv2.imwrite(
-            str(pathlib.Path(output_path / p.name)),
-            rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
-          )
-
-    return ("picture", return_list) if return_list else (None, [])
-
-  def select_degree_picture(self, picture: str, img: numpy.array) -> Optional[float]:
+  def select_degree(self, picture: str, img: numpy.array) -> Optional[float]:
     """select(get) rotation degree using GUI window
 
     Args:
@@ -2748,14 +2990,85 @@ class RotatingPicture:
         print("'Esq' is pressed. abort")
         return None
 
-  def select_degree_directory(
-    self, directory: str, picture_path_list: List[pathlib.Path]
-  ) -> Optional[float]:
+
+class RotatingPictureDirectory:
+  """class to rotate picture"""
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    degree: Optional[float] = None,
+  ):
+    """constructor
+
+    Args:
+        target_list (Optional[List[str]], optional): list of directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): [description]. flag to output in color to False.
+        degree (Optional[float], optional): degree of rotation. Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__degree = degree
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_degree(self) -> Optional[float]:
+    return self.__degree
+
+  def execute(self):
+    """rotating process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output path names
+    """
+    if self.get_degree() is not None:
+      degree = self.get_degree()
+      rad = degree / 180.0 * numpy.pi
+      sin_rad = numpy.absolute(numpy.sin(rad))
+      cos_rad = numpy.absolute(numpy.cos(rad))
+
+    output_path_list = get_output_path(self.get_target_list(), "rotated")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(self.get_target_list(), output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+
+      if self.get_degree() is None:
+        degree = self.select_degree(directory, p_list)
+        if degree is None:
+          continue
+        rad = degree / 180.0 * numpy.pi
+        sin_rad = numpy.absolute(numpy.sin(rad))
+        cos_rad = numpy.absolute(numpy.cos(rad))
+
+      return_list.append(str(output_path))
+      prepare_output_directory(output_path)
+      print("rotating picture in '{0}'...".format(directory))
+
+      for p in p_list:
+        img = cv2.imread(p)
+        rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
+        cv2.imwrite(
+          str(pathlib.Path(output_path / pathlib.Path(p).name)),
+          rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
+        )
+
+    return return_list if return_list else None
+
+  def select_degree(self, directory: str, picture_list: List[str]) -> Optional[float]:
     """select(get) rotation degree using GUI window
 
     Args:
         directory (str): directory name
-        picture_path_list (List[pathlib.Path]): picture path list
+        picture_list (List[str]): picture list
 
     Returns:
         Optional[float]: rotation degree
@@ -2764,7 +3077,7 @@ class RotatingPicture:
     cv2.resizeWindow(directory, 500, 700)
     help_exists = True
 
-    frames = len(picture_path_list) - 1
+    frames = len(picture_list) - 1
     division = 50
     tick = division if division < frames else frames
     tick_s = (int)(frames / division) + 1
@@ -2785,7 +3098,7 @@ class RotatingPicture:
       frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
       frame_s = cv2.getTrackbarPos("frame s\n", directory)
       frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(str(picture_path_list[frame_now]))
+      img = cv2.imread(picture_list[frame_now])
 
       degree = cv2.getTrackbarPos("degree\n", directory) * rotation_tick_s
       degree_s = cv2.getTrackbarPos("degree s\n", directory)
