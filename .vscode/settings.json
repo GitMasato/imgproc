@@ -29,12 +29,15 @@
     "cmap",
     "dsize",
     "fourcc",
+    "hconcat",
     "imgproc",
     "imread",
     "imshow",
     "imwrite",
     "nargs",
     "numpy",
-    "pyplot"
+    "pyplot",
+    "uint",
+    "vconcat"
   ],
 }

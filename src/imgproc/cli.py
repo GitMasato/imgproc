@@ -80,6 +80,20 @@ def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
   )
 
 
+def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
+  """call function when concatenate command is given
+  """
+  call_check_arg("concatenate", args, parser)
+  if args.type == "picture":
+    return process.ConcatenatingPicture(
+      picture_list=args.target, is_colored=args.color, number=args.number
+    )
+  elif args.type == "movie":
+    return process.ConcatenatingMovie(
+      movie_list=args.target, is_colored=args.color, number=args.number
+    )
+
+
 def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when crop command is given
   """
@@ -229,6 +243,29 @@ def read_cli_argument() -> process.ABCProcess:
     default=None,
     metavar=("start", "stop", "step"),
     help="time at beginning and end of capture and time step (float) [s]"
+    + "\nif this is not given, you will select this in GUI window"
+    + "\n ",
+  )
+
+  parser_concatenate = subparsers.add_parser(
+    "concatenate",
+    formatter_class=argparse.RawTextHelpFormatter,
+    help="to concatenate movie/picture" + "\n(see sub-option 'crop -h')" + "\n ",
+    description="sub-command 'concatenate': to concatenate movie/picture"
+    + "\n\nmax number of targets is 25."
+    + "\nsizes of pictures are adjusted based on first target size.",
+  )
+  add_argument_type(parser_concatenate)
+  add_argument_target(parser_concatenate)
+  add_argument_color(parser_concatenate)
+  parser_concatenate.set_defaults(call=call_concatenate)
+  parser_concatenate.add_argument(
+    "--number",
+    type=int,
+    default=None,
+    metavar=("x"),
+    help="number of targets concatenated in x direction"
+    + "\nmax number of targets in each direction is 25."
     + "\nif this is not given, you will select this in GUI window"
     + "\n ",
   )

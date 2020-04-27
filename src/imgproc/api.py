@@ -24,7 +24,11 @@ def animate(
   Args:
       target_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      fps (float, optional): fps of created movie. Defaults to None. if this is not given, you will select this in GUI window
+      fps (float, optional): fps of created movie. Defaults to None. if this is not
+      given, you will select this in GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no picture is given!")
@@ -47,6 +51,9 @@ def binarize(
       target_list (List[str], optional): list of movies, pictures or directories where pictures are stored. Defaults to None.
       is_movie (bool, optional): movie (True) or picture (False). Defaults to False.
       thresholds (Tuple[int, int], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. If this variable is None, this will be selected using GUI window. Defaults to None.
+
+   Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no target is given!")
@@ -75,6 +82,9 @@ def capture(
       target_list (List[str], optional): list of movie-file paths. Defaults to None.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). Start must be smaller than stop, and difference between start and stop must be larger than step. Defaults to None. If this variable is None, this will be selected using GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no movie is given!")
@@ -83,6 +93,39 @@ def capture(
   return process.CapturingMovie(
     movie_list=target_list, is_colored=is_colored, times=times
   ).execute()
+
+
+def concatenate(
+  *,
+  target_list: Optional[List[str]] = None,
+  is_movie: bool = False,
+  is_colored: bool = False,
+  number: Optional[int] = None,
+):
+  """api to concatenate movie/picture (note: keyword-only argument)
+
+  Args:
+      target_list (List[str], optional): list of movies, pictures or directories where pictures are stored. Defaults to None.
+      is_movie (bool, optional): movie (True) or picture (False). Defaults to False.
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      number (int, optional): number of targets concatenated in x direction. max number of targets in each direction is 25. if this variable is None, this will be selected using GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
+  """
+  if not target_list:
+    print("no target is given!")
+    return (None, [])
+
+  if is_movie:
+    return process.ConcatenatingMovie(
+      movie_list=target_list, is_colored=is_colored, number=number
+    ).execute()
+
+  else:
+    return process.ConcatenatingPicture(
+      picture_list=target_list, is_colored=is_colored, number=number
+    ).execute()
 
 
 def crop(
@@ -99,6 +142,9 @@ def crop(
       is_movie (bool, optional): movie (True) or picture (False). Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       postisions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no target is given!")
@@ -123,6 +169,9 @@ def hist_luminance(
   Args:
       target_list (List[str], optional): list of paths of pictures or directories where pictures are stored. Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no picture is given!")
@@ -147,6 +196,9 @@ def resize(
       is_movie (bool, optional): movie (True) or picture (False). Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       scales (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to None. if this is not given, you will select this in GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no target is given!")
@@ -177,6 +229,9 @@ def rotate(
       is_movie (bool, optional): movie (True) or picture (False). Defaults to False.
       is_colored (bool, optional): flag to output in color. Defaults to False.
       degree (float, optional): degree of rotation. Defaults to None. if this is not given, you will select this in GUI window
+
+  Returns:
+      return (Tuple[str, List[str]]): return type (None, "picture", "movie") and list of outputs (movies, pictures or directories where pictures are stored). Defaults to None. if process is not executed, (None, []) is returned
   """
   if not target_list:
     print("no target is given!")

@@ -1,6 +1,7 @@
 """process module containing image process functions
 """
 import cv2
+import math
 import numpy
 import pathlib
 import shutil
@@ -910,6 +911,458 @@ class CapturingMovie:
         cv2.destroyAllWindows()
         print("'Esc' is pressed. abort")
         return None
+
+
+class ConcatenatingMovie:
+  """class to concatenate movie"""
+
+  def __init__(
+    self,
+    *,
+    movie_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    number: Optional[int] = None,
+  ):
+    """constructor
+
+    Args:
+        movie_list (Optional[List[str]], optional): list of movies. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        numbers (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
+    """
+    self.__movie_list = movie_list
+    self.__is_colored = is_colored
+    self.__number = number
+
+  def get_movie_list(self) -> Optional[List[str]]:
+    return self.__movie_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_number(self) -> Optional[int]:
+    return self.__number
+
+  def execute(self):
+    """resizing process
+
+    Returns:
+        Tuple[str, List[str]]: type of output, list of output (movie) path names
+    """
+    movies = self.get_movie_list()
+    if 25 < len(movies):
+      print("'{0}' movies given. max is 25".format(len(movies)))
+      return (None, [])
+
+    size_list: List[Tuple[int, int]] = []
+    frame_list: List[int] = []
+    fps_list: List[float] = []
+    for movie in movies:
+      cap = cv2.VideoCapture(movie)
+      W, H, frames, fps = get_movie_info(cap)
+      size_list.append((W, H))
+      frame_list.append(frames)
+      fps_list.append(fps)
+
+    if self.get_number() is not None:
+      number_x = self.get_number()
+    else:
+      number_x = self.select_number(movies, size_list, frame_list)
+
+    number_y = math.ceil(len(movies) / number_x)
+    black_list = [numpy.zeros((s[1], s[0], 3), numpy.uint8) for s in size_list]
+    concat = self.get_concatenated_movie_frame(
+      movies, frame_list, black_list, 0, number_x, number_y
+    )
+    size = (concat.shape[1], concat.shape[0])
+
+    movie_first = movies[0]
+    output_path_list = get_output_path([movie_first], "concatenated")
+    clean_output_directory(output_path_list)
+    output_name = (
+      str(pathlib.Path(output_path_list[0] / pathlib.Path(movie_first).stem)) + ".mp4"
+    )
+    fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+    output = cv2.VideoWriter(output_name, fourcc, fps_list[0], size, self.is_colored())
+    return_list: List[str] = [output_name]
+    print("concatenating movie '{0}'...".format(output_name))
+
+    for frame in range(max(frame_list) + 1):
+      concat = self.get_concatenated_movie_frame(
+        movies, frame_list, black_list, frame, number_x, number_y
+      )
+      output.write(
+        concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY)
+      )
+
+    return ("concatenate", return_list) if return_list else (None, [])
+
+  def select_number(
+    self,
+    movie_list: List[str],
+    size_list: List[Tuple[int, int]],
+    frame_list: List[int],
+  ) -> Optional[int]:
+    """select(get) number of concatenating using GUI window
+
+    Args:
+        movie (List[str]): movie list
+        size_list (List[Tuple[int, int]]): list of movie size
+        frame_list (List[int]): list of movie frame size
+
+    Returns:
+        Optional[int]: number of movies concatenated in x direction
+    """
+    window = movie_list[0]
+    movie_number = len(movie_list)
+    max_frame = max(frame_list)
+    black_list = [numpy.zeros((s[1], s[0], 3), numpy.uint8) for s in size_list]
+
+    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window, 500, 700)
+    help_exists = True
+
+    division = 100
+    tick = division if division < max_frame else max_frame
+    tick_s = (int)(max_frame / division) + 1
+    cv2.createTrackbar("frame\n", window, 0, tick - 1, no)
+    cv2.createTrackbar("frame s\n", window, 0, tick_s, no)
+    cv2.createTrackbar("x\n", window, 1, 5, no)
+
+    print("--- concatenate ---")
+    print("select number in GUI window!")
+    print("(s: save if selected, h:on/off help, q/esc: abort)")
+
+    while True:
+
+      frame = cv2.getTrackbarPos("frame\n", window) * tick_s
+      frame_s = cv2.getTrackbarPos("frame s\n", window)
+      frame_now = frame + frame_s if frame + frame_s < max_frame else max_frame
+      number_x = cv2.getTrackbarPos("x\n", window)
+      if number_x == 0:
+        number_x = 1
+      elif movie_number < number_x:
+        number_x = movie_number
+
+      number_y = math.ceil(movie_number / number_x)
+      concat = self.get_concatenated_movie_frame(
+        movie_list, frame_list, black_list, frame_now, number_x, number_y
+      )
+
+      if help_exists:
+        add_texts_upper_left(
+          concat, ["[concatenate]", "select x", "frame: {0}".format(frame_now)],
+        )
+        add_texts_lower_right(
+          concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
+        )
+
+      cv2.imshow(window, concat)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+        print("'s' is pressed. number is saved ({0})".format(number_x))
+        cv2.destroyAllWindows()
+        return number_x
+
+      elif k == ord("h"):
+        if help_exists:
+          help_exists = False
+        else:
+          help_exists = True
+        continue
+
+      elif k == ord("q"):
+        cv2.destroyAllWindows()
+        print("'q' is pressed. abort")
+        return None
+
+      elif k == 27:
+        cv2.destroyAllWindows()
+        print("'Esq' is pressed. abort")
+        return None
+
+  def get_concatenated_movie_frame(
+    self,
+    movie_list: List[str],
+    frame_list: List[int],
+    black_list: List[numpy.array],
+    frame: int,
+    number_x: int,
+    number_y: int,
+  ) -> numpy.array:
+    """get concatenated frame of movie
+
+    Args:
+        movie_list (List[str]): list of movies
+        frame_list (List[int]): list of frame numbers of movies
+        black_list (List[numpy.array]): list of black images
+        frame (int): target frame
+        number_x (int): number of movies concatenated in x direction
+        number_y (int): number of movies concatenated in x direction
+
+    Returns:
+        numpy.array: concatenated image
+    """
+    pic_list = []
+    for idx, movie in enumerate(movie_list):
+      if frame_list[idx] < frame:
+        pic_list.append(black_list[idx])
+      else:
+        cap = cv2.VideoCapture(movie)
+        cap.set(cv2.CAP_PROP_POS_FRAMES, frame)
+        ret, img = cap.read()
+        pic_list.append(img)
+    for a in range(number_x * number_y - len(movie_list)):
+      pic_list.append(black_list[0])
+
+    multi_list = [
+      pic_list[y * number_x : y * number_x + number_x] for y in range(number_y)
+    ]
+    concat_W = [vconcat_W(one_list, pic_list[0].shape[0]) for one_list in multi_list]
+    return vconcat_H(concat_W, concat_W[0].shape[1])
+
+
+class ConcatenatingPicture:
+  """class to concatenate picture"""
+
+  def __init__(
+    self,
+    *,
+    picture_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    number: Optional[int] = None,
+  ):
+    """constructor
+
+    Args:
+        picture_list (Optional[List[str]], optional): list of pictures. directories where pictures are stored. Defaults to None.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        numbers (Optional[int], optional):  number of pictures concatenated in x direction. Defaults to None.
+    """
+    self.__picture_list = picture_list
+    self.__is_colored = is_colored
+    self.__number = number
+
+  def get_picture_list(self) -> Optional[List[str]]:
+    return self.__picture_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_number(self) -> Optional[int]:
+    return self.__number
+
+  def execute(self):
+    """concatenating process
+
+    Returns:
+        Tuple[str, List[str]]: type of output, list of output (picture or directory) path names
+    """
+    return_list: List[str] = []
+    pictures = []
+    direcotry_path_list = []
+    for target in self.get_picture_list():
+      target_path = pathlib.Path(target)
+      if target_path.is_file():
+        pictures.append(str(target_path))
+      if target_path.is_dir():
+        direcotry_path_list.append(target_path)
+
+    if pictures:
+
+      if 25 < len(pictures):
+        print("'{0}' pictures given. max is 25".format(len(pictures)))
+        return (None, [])
+
+      size_list = []
+      for picture in pictures:
+        img = cv2.imread(picture)
+        size_list.append((img.shape[1], img.shape[0]))
+
+      if self.get_number() is not None:
+        number_x = self.get_number()
+      else:
+        number_x = self.select_number(pictures, size_list)
+
+      output_path_list = get_output_path([pictures[0]], "concatenated")
+      clean_output_directory(output_path_list)
+      name = str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).name))
+
+      print("concatenating picture '{0}'...".format(name))
+      number_y = math.ceil(len(pictures) / number_x)
+      concat = self.get_concatenated_pictures(pictures, number_x, number_y)
+      return_list.append(name)
+      cv2.imwrite(
+        name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
+      )
+
+    if direcotry_path_list:
+
+      output_path_list = get_output_path(
+        [str(direcotry_path) for direcotry_path in direcotry_path_list], "concatenated"
+      )
+      clean_output_directory(output_path_list)
+
+      for idx, direcotry_path in enumerate(direcotry_path_list):
+
+        p_list = [str(p) for p in list(direcotry_path.iterdir())]
+        if 25 < len(p_list):
+          print("'{0}' pictures given. max is 25".format(len(p_list)))
+          return (None, [])
+
+        size_list = []
+        for p in p_list:
+          img = cv2.imread(p)
+          size_list.append((img.shape[1], img.shape[0]))
+
+        if self.get_number() is not None:
+          number_x = self.get_number()
+        else:
+          number_x = self.select_number(p_list, size_list)
+
+        print("concatenating pictures in '{0}'...".format(str(direcotry_path)))
+        number_y = math.ceil(len(p_list) / number_x)
+        concat = self.get_concatenated_pictures(p_list, number_x, number_y)
+
+        file_name = direcotry_path.name + pathlib.Path(p_list[0]).suffix
+        name = str(pathlib.Path(output_path_list[idx] / file_name))
+        return_list.append(name)
+        cv2.imwrite(
+          name,
+          concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
+        )
+
+    return ("picture", return_list) if return_list else (None, [])
+
+  def select_number(
+    self, picture_list: List[str], size_list: List[Tuple[int, int]],
+  ) -> Optional[int]:
+    """select(get) number of concatenating using GUI window
+
+    Args:
+        picture_list (List[str]): picture list
+        size_list (List[Tuple[int, int]]): list of picture size
+
+    Returns:
+        Optional[int]: number of pictures concatenated in x direction
+    """
+    window = picture_list[0]
+    cv2.namedWindow(window, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(window, 500, 700)
+    help_exists = True
+    cv2.createTrackbar("x\n", window, 1, 5, no)
+    print("--- concatenate ---")
+    print("select number in GUI window!")
+    print("(s: save if selected, h:on/off help, q/esc: abort)")
+
+    while True:
+
+      number_x = cv2.getTrackbarPos("x\n", window)
+      if number_x == 0:
+        number_x = 1
+      elif len(picture_list) < number_x:
+        number_x = len(picture_list)
+      number_y = math.ceil(len(picture_list) / number_x)
+      concat = self.get_concatenated_pictures(picture_list, number_x, number_y)
+
+      if help_exists:
+        add_texts_upper_left(
+          concat, ["[concatenate]", "select x"],
+        )
+        add_texts_lower_right(
+          concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
+        )
+      cv2.imshow(window, concat)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+        print("'s' is pressed. number is saved ({0})".format(number_x))
+        cv2.destroyAllWindows()
+        return number_x
+
+      elif k == ord("h"):
+        if help_exists:
+          help_exists = False
+        else:
+          help_exists = True
+        continue
+
+      elif k == ord("q"):
+        cv2.destroyAllWindows()
+        print("'q' is pressed. abort")
+        return None
+
+      elif k == 27:
+        cv2.destroyAllWindows()
+        print("'Esq' is pressed. abort")
+        return None
+
+  def get_concatenated_pictures(
+    self, picture_list: List[str], number_x: int, number_y: int,
+  ) -> numpy.array:
+    """get concatenated frame of movie
+
+      Args:
+          picture_list (List[str]): list of pictures
+          number_x (int): number of movies concatenated in x direction
+          number_y (int): number of movies concatenated in x direction
+
+      Returns:
+          numpy.array: concatenated image
+      """
+    pic_list = []
+    for idx, picture in enumerate(picture_list):
+      pic_list.append(cv2.imread(picture))
+
+    for a in range(number_x * number_y - len(picture_list)):
+      pic_list.append(
+        numpy.zeros((pic_list[0].shape[0], pic_list[0].shape[1], 3), numpy.uint8)
+      )
+
+    multi_list = [
+      pic_list[y * number_x : y * number_x + number_x] for y in range(number_y)
+    ]
+    concat_W = [vconcat_W(one_list, pic_list[0].shape[0]) for one_list in multi_list]
+    return vconcat_H(concat_W, concat_W[0].shape[1])
+
+
+def vconcat_H(image_list: List[numpy.array], W: int) -> numpy.array:
+  """concatenate image in H direction
+
+  Args:
+      image_list (List[numpy.array]): list of images concatenated
+      W (int): W size
+
+  Returns:
+      numpy.array: numpy.array image
+  """
+  resized = [
+    cv2.resize(
+      img, (W, int(img.shape[0] * W / img.shape[1])), interpolation=cv2.INTER_CUBIC,
+    )
+    for img in image_list
+  ]
+  return cv2.vconcat(resized)
+
+
+def vconcat_W(image_list: List[numpy.array], H: int) -> numpy.array:
+  """concatenate image in W direction
+
+  Args:
+      image_list (List[numpy.array]): list of images concatenated
+      H (int): H size
+
+  Returns:
+      numpy.array: numpy.array image
+  """
+  resized = [
+    cv2.resize(
+      img, (int(H / img.shape[0] * img.shape[1]), H), interpolation=cv2.INTER_CUBIC,
+    )
+    for img in image_list
+  ]
+  return cv2.hconcat(resized)
 
 
 class CroppingMovie:
