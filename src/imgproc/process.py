@@ -300,6 +300,7 @@ class AnimatingPictureDirectory:
     for directory, output_path in zip(directories, output_path_list):
 
       directory_path = pathlib.Path(directory)
+      output_name = str(pathlib.Path(output_path / directory_path.name)) + ".mp4"
       p_list = [str(p) for p in list(directory_path.iterdir())]
       W_list: List[int] = []
       H_list: List[int] = []
@@ -307,7 +308,7 @@ class AnimatingPictureDirectory:
       if self.get_fps() is not None:
         fps = self.get_fps()
       else:
-        fps = select_fps(directory, p_list)
+        fps = select_fps(output_name, p_list)
       if fps is None:
         continue
 
@@ -318,7 +319,6 @@ class AnimatingPictureDirectory:
 
       W = max(W_list)
       H = max(H_list)
-      output_name = str(pathlib.Path(output_path / directory_path.name)) + ".mp4"
       return_list.append(output_name)
       prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -350,7 +350,7 @@ def select_fps(
   """
   cv2.namedWindow(movie_name, cv2.WINDOW_NORMAL)
   cv2.resizeWindow(movie_name, 500, 700)
-  help_exists = True
+  help_exists = False
 
   frames = len(picture_path_list) - 1
   division = 50
@@ -453,15 +453,15 @@ class BinarizingMovie:
 
     for movie, output_path in zip(self.get_target_list(), output_path_list):
 
+      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(movie, frames, fps, cap)
+        thresholds = self.select_thresholds(output_name, frames, fps, cap)
         if thresholds is None:
           continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
       prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -495,7 +495,7 @@ class BinarizingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < frames else frames
@@ -506,7 +506,7 @@ class BinarizingMovie:
     cv2.createTrackbar("high\n", movie, 255, 255, no)
 
     print("--- binarize ---")
-    print("select threshold in GUI window!")
+    print("select threshold (low, high) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -612,10 +612,11 @@ class BinarizingPicture:
     for picture, output_path in zip(pictures, output_path_list):
 
       picture_path = pathlib.Path(picture)
+      name = str(pathlib.Path(output_path / picture_path.name))
       img = cv2.imread(picture)
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
       if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(picture, gray)
+        thresholds = self.select_thresholds(name, gray)
         if thresholds is None:
           continue
 
@@ -623,7 +624,6 @@ class BinarizingPicture:
       prepare_output_directory(output_path)
       ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
       ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
-      name = str(pathlib.Path(output_path / picture_path.name))
       return_list.append(name)
       cv2.imwrite(name, bin_2)
 
@@ -642,12 +642,12 @@ class BinarizingPicture:
         Optional[Tuple[int, int]]: [low, high] threshold values
     """
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
-    help_exists = True
+    help_exists = False
 
     cv2.createTrackbar("low\n", picture, 0, 255, no)
     cv2.createTrackbar("high\n", picture, 255, 255, no)
     print("--- binarize ---")
-    print("select threshold in GUI window!")
+    print("select threshold (low, high) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -740,7 +740,7 @@ class BinarizingPictureDirectory:
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
       if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(directory_path.name, p_list)
+        thresholds = self.select_thresholds(str(output_path), p_list)
         if thresholds is None:
           continue
 
@@ -771,7 +771,7 @@ class BinarizingPictureDirectory:
     """
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
-    help_exists = True
+    help_exists = False
 
     frames = len(picture_list) - 1
     division = 50
@@ -783,7 +783,7 @@ class BinarizingPictureDirectory:
     cv2.createTrackbar("high\n", directory, 255, 255, no)
 
     print("--- binarize ---")
-    print("select threshold in GUI window!")
+    print("select threshold (low, high) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -902,7 +902,7 @@ class CapturingMovie:
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_times() is None:
-        time = self.select_times(movie, frames, fps, cap)
+        time = self.select_times(str(output_path), frames, fps, cap)
         if time is None:
           continue
 
@@ -941,7 +941,7 @@ class CapturingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < frames else frames
@@ -956,7 +956,7 @@ class CapturingMovie:
     cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
     cv2.createTrackbar("step 10ms\n", movie, 1, division, no)
     print("--- capture ---")
-    print("select time parameters in GUI window!")
+    print("select time (start, stop, step) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -1138,7 +1138,7 @@ class ConcatenatingMovie:
 
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < max_frame else max_frame
@@ -1148,7 +1148,7 @@ class ConcatenatingMovie:
     cv2.createTrackbar("x\n", window, 1, 5, no)
 
     print("--- concatenate ---")
-    print("select number in GUI window!")
+    print("select number of pictures in x direction in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -1393,10 +1393,11 @@ def select_number(
   window = picture_list[0]
   cv2.namedWindow(window, cv2.WINDOW_NORMAL)
   cv2.resizeWindow(window, 500, 700)
-  help_exists = True
+  help_exists = False
   cv2.createTrackbar("x\n", window, 1, 5, no)
+
   print("--- concatenate ---")
-  print("select number in GUI window!")
+  print("select number of pictures in x direction in GUI window!")
   print("(s: save if selected, h:on/off help, q/esc: abort)")
 
   while True:
@@ -1556,16 +1557,16 @@ class CroppingMovie:
 
     for movie, output_path in zip(self.get_target_list(), output_path_list):
 
+      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
       if self.get_positions() is None:
-        positions = self.select_positions(movie, W, H, frames, fps, cap)
+        positions = self.select_positions(output_name, W, H, frames, fps, cap)
         if positions is None:
           continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(positions[2] - positions[0]), int(positions[3] - positions[1]))
-      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
       prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -1601,7 +1602,7 @@ class CroppingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < frames else frames
@@ -1616,7 +1617,7 @@ class CroppingMovie:
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select positions in GUI window!")
+    print("select two positions in GUI window!")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -1758,16 +1759,16 @@ class CroppingPicture:
 
     for picture, output_path in zip(self.get_target_list(), output_path_list):
 
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
       if self.get_positions() is None:
-        positions = self.select_positions(picture, img)
+        positions = self.select_positions(name, img)
         if positions is None:
           continue
 
       print("cropping picture '{0}'...".format(picture))
       prepare_output_directory(output_path)
       cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
-      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       return_list.append(name)
       cv2.imwrite(
         name,
@@ -1794,11 +1795,11 @@ class CroppingPicture:
 
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback(picture, mouse_on_select_positions, points)
-    help_exists = True
+    help_exists = False
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select positions in GUI window!")
+    print("select two positions in GUI window!")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -1938,7 +1939,7 @@ class CroppingPictureDirectory:
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
       if self.get_positions() is None:
-        positions = self.select_positions(directory, p_list)
+        positions = self.select_positions(str(output_path), p_list)
         if positions is None:
           continue
 
@@ -1970,7 +1971,7 @@ class CroppingPictureDirectory:
     """
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
-    help_exists = True
+    help_exists = False
 
     frames = len(picture_list) - 1
     division = 50
@@ -1985,7 +1986,7 @@ class CroppingPictureDirectory:
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select positions in GUI window!")
+    print("select two positions in GUI window!")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -2265,19 +2266,19 @@ class ResizingMovie:
 
     for movie, output_path in zip(self.get_target_list(), output_path_list):
 
+      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
       if self.get_scales() is not None:
         scales = self.get_scales()
       else:
-        scales = self.select_scales(movie, W, H, frames, fps, cap)
+        scales = self.select_scales(output_name, W, H, frames, fps, cap)
       if scales is None:
         continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(W * scales[0]), int(H * scales[1]))
-      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
       prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -2313,7 +2314,7 @@ class ResizingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < frames else frames
@@ -2327,7 +2328,7 @@ class ResizingMovie:
     cv2.createTrackbar("scale y\n*1.0", movie, 1, 10, no)
 
     print("--- resize ---")
-    print("select scales in GUI window!")
+    print("select scales (x, y) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -2429,20 +2430,20 @@ class ResizingPicture:
 
     for picture, output_path in zip(self.get_target_list(), output_path_list):
 
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
       W, H = img.shape[1], img.shape[0]
 
       if self.get_scales() is not None:
         scales = self.get_scales()
       else:
-        scales = self.select_scales(picture, img, W, H)
+        scales = self.select_scales(name, img, W, H)
       if scales is None:
         continue
 
       print("resizing picture '{0}'...".format(picture))
       prepare_output_directory(output_path)
       resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
-      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       return_list.append(name)
       cv2.imwrite(
         name,
@@ -2467,7 +2468,7 @@ class ResizingPicture:
     """
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(picture, 500, 700)
-    help_exists = True
+    help_exists = False
 
     cv2.createTrackbar("scale x\n*0.1", picture, 10, 10, no)
     cv2.createTrackbar("scale x\n*1.0", picture, 1, 10, no)
@@ -2475,7 +2476,7 @@ class ResizingPicture:
     cv2.createTrackbar("scale y\n*1.0", picture, 1, 10, no)
 
     print("--- resize ---")
-    print("select scales in GUI window!")
+    print("select scales (x, y) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -2571,7 +2572,7 @@ class ResizingPictureDirectory:
       if self.get_scales() is not None:
         scales = self.get_scales()
       else:
-        scales = self.select_scales(directory_path.name, p_list)
+        scales = self.select_scales(str(output_path), p_list)
       if scales is None:
         continue
 
@@ -2604,7 +2605,7 @@ class ResizingPictureDirectory:
     """
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
-    help_exists = True
+    help_exists = False
 
     frames = len(picture_list) - 1
     division = 50
@@ -2619,7 +2620,7 @@ class ResizingPictureDirectory:
     cv2.createTrackbar("scale y\n*1.0", directory, 1, 10, no)
 
     print("--- resize ---")
-    print("select scales in GUI window!")
+    print("select scales (x, y) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
 
     while True:
@@ -2727,11 +2728,12 @@ class RotatingMovie:
 
     for movie, output_path in zip(self.get_target_list(), output_path_list):
 
+      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
       if self.get_degree() is None:
-        degree = self.select_degree(movie, frames, fps, cap)
+        degree = self.select_degree(output_name, frames, fps, cap)
         if degree is None:
           continue
         rad = degree / 180.0 * numpy.pi
@@ -2748,7 +2750,6 @@ class RotatingMovie:
       affine_matrix[0][2] = affine_matrix[0][2] - W / 2 + W_rot / 2
       affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
 
-      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       return_list.append(output_name)
       prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
@@ -2782,7 +2783,7 @@ class RotatingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = True
+    help_exists = False
 
     division = 100
     tick = division if division < frames else frames
@@ -2903,9 +2904,11 @@ class RotatingPicture:
 
     for picture, output_path in zip(self.get_target_list(), output_path_list):
 
+      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
+
       if self.get_degree() is None:
-        degree = self.select_degree(picture, img)
+        degree = self.select_degree(name, img)
         if degree is None:
           continue
         rad = degree / 180.0 * numpy.pi
@@ -2915,7 +2918,6 @@ class RotatingPicture:
       print("rotating picture '{0}'...".format(picture))
       prepare_output_directory(output_path)
       rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
-      name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       return_list.append(name)
       cv2.imwrite(
         name,
@@ -2936,7 +2938,7 @@ class RotatingPicture:
     """
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(picture, 500, 700)
-    help_exists = True
+    help_exists = False
 
     rotation_tick = 4
     rotation_tick_s = 90
@@ -3042,7 +3044,7 @@ class RotatingPictureDirectory:
       p_list = [str(p) for p in list(directory_path.iterdir())]
 
       if self.get_degree() is None:
-        degree = self.select_degree(directory, p_list)
+        degree = self.select_degree(str(output_path), p_list)
         if degree is None:
           continue
         rad = degree / 180.0 * numpy.pi
@@ -3075,7 +3077,7 @@ class RotatingPictureDirectory:
     """
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
-    help_exists = True
+    help_exists = False
 
     frames = len(picture_list) - 1
     division = 50

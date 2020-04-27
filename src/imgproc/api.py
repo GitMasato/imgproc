@@ -29,6 +29,8 @@ def animate(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
@@ -63,6 +65,8 @@ def binarize(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
@@ -104,6 +108,8 @@ def capture(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list:
     sys.exit("no movie is given!")
@@ -132,6 +138,8 @@ def concatenate(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
@@ -177,6 +185,8 @@ def crop(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
@@ -216,6 +226,8 @@ def hist_luminance(target_list: List[str], *, is_colored: bool = False):
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
@@ -254,6 +266,8 @@ def resize(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
@@ -296,6 +310,8 @@ def rotate(
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
   return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
   m_list, p_list, d_list = process.sort_target_type(target_list)
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
