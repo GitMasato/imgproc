@@ -250,7 +250,7 @@ class AnimatingPicture:
     for picture in pictures:
       img = cv2.imread(picture)
       img_show = numpy.zeros((H, W, 3), numpy.uint8)
-      img_show[: img.shape[1], : img.shape[1]] = img[:]
+      img_show[: img.shape[0], : img.shape[1]] = img[:]
       output.write(
         img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
       )
@@ -302,8 +302,9 @@ class AnimatingPictureDirectory:
       directory_path = pathlib.Path(directory)
       output_name = str(pathlib.Path(output_path / directory_path.name)) + ".mp4"
       p_list = [str(p) for p in list(directory_path.iterdir())]
-      W_list: List[int] = []
-      H_list: List[int] = []
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
 
       if self.get_fps() is not None:
         fps = self.get_fps()
@@ -311,6 +312,9 @@ class AnimatingPictureDirectory:
         fps = select_fps(output_name, p_list)
       if fps is None:
         continue
+
+      W_list: List[int] = []
+      H_list: List[int] = []
 
       for picture in p_list:
         img = cv2.imread(picture)
@@ -328,7 +332,7 @@ class AnimatingPictureDirectory:
       for picture in p_list:
         img = cv2.imread(picture)
         img_show = numpy.zeros((H, W, 3), numpy.uint8)
-        img_show[: img.shape[1], : img.shape[1]] = img[:]
+        img_show[0 : img.shape[0], 0 : img.shape[1]] = img[:]
         output.write(
           img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
         )
@@ -739,6 +743,10 @@ class BinarizingPictureDirectory:
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
+
       if self.get_thresholds() is None:
         thresholds = self.select_thresholds(str(output_path), p_list)
         if thresholds is None:
@@ -954,7 +962,7 @@ class CapturingMovie:
     cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
     cv2.createTrackbar("start cap\n", movie, 0, 1, no)
     cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
-    cv2.createTrackbar("step 10ms\n", movie, 1, division, no)
+    cv2.createTrackbar("step 10ms\n", movie, 100, division, no)
     print("--- capture ---")
     print("select time (start, stop, step) in GUI window!")
     print("(s: save if selected, h:on/off help, q/esc: abort)")
@@ -1088,6 +1096,9 @@ class ConcatenatingMovie:
       number_x = self.get_number()
     else:
       number_x = self.select_number(movies, size_list, frame_list)
+
+    if number_x is None:
+      return None
 
     number_y = math.ceil(len(movies) / number_x)
     black_list = [numpy.zeros((s[1], s[0], 3), numpy.uint8) for s in size_list]
@@ -1293,6 +1304,9 @@ class ConcatenatingPicture:
     else:
       number_x = select_number(pictures, size_list)
 
+    if number_x is None:
+      return None
+
     output_path_list = get_output_path([pictures[0]], "concatenated")
     prepare_output_directory(output_path_list[0])
     name = str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).name))
@@ -1303,7 +1317,6 @@ class ConcatenatingPicture:
     cv2.imwrite(
       name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
     )
-
     return [name]
 
 
@@ -1345,12 +1358,16 @@ class ConcatenatingPictureDirectory:
     """
     directories = self.get_target_list()
     output_path_list = get_output_path(directories, "concatenated")
+    return_list: List[str] = []
 
-    for idx, direcotry in enumerate(directories):
+    for idx, directory in enumerate(directories):
 
-      directory_path = pathlib.Path(direcotry)
+      directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
       size_list = []
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
 
       if 25 < len(p_list):
         print("'{0}' pictures given. max is 25".format(len(p_list)))
@@ -1365,17 +1382,21 @@ class ConcatenatingPictureDirectory:
       else:
         number_x = select_number(p_list, size_list)
 
-      print("concatenating pictures in '{0}'...".format(direcotry))
+      if number_x is None:
+        continue
+
+      print("concatenating pictures in '{0}'...".format(directory))
       prepare_output_directory(output_path_list[0])
       number_y = math.ceil(len(p_list) / number_x)
       concat = get_concatenated_pictures(p_list, number_x, number_y)
       file_name = directory_path.name + pathlib.Path(p_list[0]).suffix
       name = str(pathlib.Path(output_path_list[idx] / file_name))
+      return_list.append(name)
       cv2.imwrite(
         name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
       )
 
-    return [name]
+    return return_list if return_list else None
 
 
 def select_number(
@@ -1612,7 +1633,6 @@ class CroppingMovie:
 
     points: List[Tuple[int, int]] = []
     warning_message: List[str] = []
-    cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback(movie, mouse_on_select_positions, points)
     line_color = (255, 255, 255)
 
@@ -1938,6 +1958,10 @@ class CroppingPictureDirectory:
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
+
       if self.get_positions() is None:
         positions = self.select_positions(str(output_path), p_list)
         if positions is None:
@@ -2167,6 +2191,9 @@ class CreatingLuminanceHistgramPictureDirectory:
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
 
       if p_list:
         return_list.append(str(output_path))
@@ -2568,6 +2595,9 @@ class ResizingPictureDirectory:
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
 
       if self.get_scales() is not None:
         scales = self.get_scales()
@@ -3042,6 +3072,9 @@ class RotatingPictureDirectory:
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
 
       if self.get_degree() is None:
         degree = self.select_degree(str(output_path), p_list)
