@@ -32,3 +32,4 @@ imgproc.process module
       RotatingMovie
       RotatingPicture
       RotatingPictureDirectory
+      TrimmingMovie

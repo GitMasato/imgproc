@@ -95,8 +95,10 @@ def get_movie_info(cap: cv2.VideoCapture) -> Tuple[int, int, int, float]:
     ret, frame = cap.read()
     if not ret:
       break
+
   frames = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
   cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
   return (W, H, frames, fps)
 
 
@@ -120,6 +122,7 @@ def get_output_path(target_list: List[str], output: str) -> List[pathlib.Path]:
       continue
 
     layers = target_path.parts
+
     if "cv2" in layers:
       p_path = target_path.parents[1] if target_path.is_file() else target_path.parent
       path_list.append(pathlib.Path(p_path / output))
@@ -232,7 +235,9 @@ class AnimatingPicture:
       fps = self.get_fps()
     else:
       fps = select_fps(name, pictures)
+
     if fps is None:
+      print("animate: abort!")
       return None
 
     for picture in pictures:
@@ -254,6 +259,7 @@ class AnimatingPicture:
       output.write(
         img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
       )
+
     return [name]
 
 
@@ -460,6 +466,7 @@ class BinarizingMovie:
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
+
       if self.get_thresholds() is None:
         thresholds = self.select_thresholds(output_name, frames, fps, cap)
         if thresholds is None:
@@ -540,8 +547,6 @@ class BinarizingMovie:
         add_texts_lower_right(
           bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
-        if high <= low:
-          add_texts_lower_left(bin_2, ["high must be > low"])
 
       cv2.imshow(movie, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -550,6 +555,7 @@ class BinarizingMovie:
         if high <= low:
           print("high luminance threshold must be > low")
           continue
+
         print("'s' is pressed. threshold is saved ({0}, {1})".format(low, high))
         cv2.destroyAllWindows()
         return (low, high)
@@ -619,6 +625,7 @@ class BinarizingPicture:
       name = str(pathlib.Path(output_path / picture_path.name))
       img = cv2.imread(picture)
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
+
       if self.get_thresholds() is None:
         thresholds = self.select_thresholds(name, gray)
         if thresholds is None:
@@ -666,8 +673,6 @@ class BinarizingPicture:
         add_texts_lower_right(
           bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
-        if high <= low:
-          add_texts_lower_left(bin_2, ["high must be > low"])
 
       cv2.imshow(picture, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -676,6 +681,7 @@ class BinarizingPicture:
         if high <= low:
           print("high luminance threshold must be > low")
           continue
+
         print("'s' is pressed. threshold is saved ({0}, {1})".format(low, high))
         cv2.destroyAllWindows()
         return (low, high)
@@ -821,8 +827,6 @@ class BinarizingPictureDirectory:
         add_texts_lower_right(
           bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
-        if high <= low:
-          add_texts_lower_left(bin_2, ["high must be > low"])
 
       cv2.imshow(directory, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -831,6 +835,7 @@ class BinarizingPictureDirectory:
         if high <= low:
           print("high luminance threshold must be > low")
           continue
+
         print("'s' is pressed. threshold is saved ({0}, {1})".format(low, high))
         cv2.destroyAllWindows()
         return (low, high)
@@ -914,6 +919,14 @@ class CapturingMovie:
         if time is None:
           continue
 
+      if frames < round(time[0] * fps) or frames < round(time[1] * fps):
+        print(
+          "start & stop frames ({0},{1}) must be < max frame ({2})".format(
+            round(time[0] * fps), round(time[1] * fps), frames
+          )
+        )
+        continue
+
       capture_time = time[0]
       return_list.append(str(output_path))
       prepare_output_directory(output_path)
@@ -956,7 +969,6 @@ class CapturingMovie:
     tick_s = (int)(frames / division) + 1
     is_start_on, is_stop_on = False, False
     start_time, stop_time = 0.0, 0.0
-    warning_message: List[str] = []
 
     cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
     cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
@@ -1003,25 +1015,30 @@ class CapturingMovie:
           ],
         )
         add_texts_lower_right(img, ["s: save", "q/esc: abort"])
-        add_texts_lower_left(img, warning_message)
 
       cv2.imshow(movie, img)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
+
         if (not is_start_on) or (not is_stop_on):
-          warning_message = ["start-stop not selected"]
+          print("start or stop is not selected!")
           continue
         if stop_time - start_time <= time_step:
-          warning_message = ["stop-start must be > step"]
+          print("difference between stop & start must be > step!")
           continue
         if stop_time <= start_time:
-          warning_message = ["stop must be > start"]
+          print("stop must be > start!")
           continue
         if time_step < 0.001:
-          warning_message = ["step must be > 0"]
+          print("step must be > 0!")
           continue
-        print("'s' is pressed. capture parameters are saved")
+
+        print(
+          "'s' is pressed. capture time ({0},{1},{2}) are saved".format(
+            start_time, stop_time, time_step
+          )
+        )
         cv2.destroyAllWindows()
         return (start_time, stop_time, time_step)
 
@@ -1171,6 +1188,7 @@ class ConcatenatingMovie:
       frame_s = cv2.getTrackbarPos("frame s\n", window)
       frame_now = frame + frame_s if frame + frame_s < max_frame else max_frame
       number_x = cv2.getTrackbarPos("x\n", window)
+
       if number_x == 0:
         number_x = 1
       elif movie_number < number_x:
@@ -1193,7 +1211,9 @@ class ConcatenatingMovie:
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. number is saved ({0})".format(number_x))
+        print(
+          "'s' is pressed. concatenating number (x-dir) is saved ({0})".format(number_x)
+        )
         cv2.destroyAllWindows()
         return number_x
 
@@ -1445,7 +1465,9 @@ def select_number(
     k = cv2.waitKey(1) & 0xFF
 
     if k == ord("s"):
-      print("'s' is pressed. number is saved ({0})".format(number_x))
+      print(
+        "'s' is pressed. concatenating number (x-dir) is saved ({0})".format(number_x)
+      )
       cv2.destroyAllWindows()
       return number_x
 
@@ -1584,6 +1606,7 @@ class CroppingMovie:
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
+
       if self.get_positions() is None:
         positions = self.select_positions(output_name, W, H, frames, fps, cap)
         if positions is None:
@@ -1635,12 +1658,11 @@ class CroppingMovie:
     cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
 
     points: List[Tuple[int, int]] = []
-    warning_message: List[str] = []
     cv2.setMouseCallback(movie, mouse_on_select_positions, points)
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select two positions in GUI window!")
+    print("select two positions in GUI window! (2nd must be > 1st)")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -1657,7 +1679,6 @@ class CroppingMovie:
       elif len(points) == 2:
         if points[1][1] <= points[0][1] or points[1][0] <= points[0][0]:
           points.clear()
-          warning_message = ["2nd must be > 1st"]
         else:
           cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), line_color, 2)
           cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), line_color, 2)
@@ -1665,7 +1686,6 @@ class CroppingMovie:
           cv2.line(img, (0, points[1][1]), (W - 1, points[1][1]), line_color, 2)
       elif len(points) == 3:
         points.clear()
-        warning_message = ["3rd is not accepted"]
 
       if help_exists:
         add_texts_lower_right(
@@ -1682,7 +1702,7 @@ class CroppingMovie:
           img,
           ["[crop]", "select two positions", "now: {0:.2f}s".format(frame_now / fps)],
         )
-        add_texts_lower_left(img, warning_message)
+
         if len(points) == 1:
           add_texts_upper_right(
             img, ["selected:", "[{0},{1}]".format(points[0][0], points[0][1])]
@@ -1708,13 +1728,11 @@ class CroppingMovie:
           return (points[0][0], points[0][1], points[1][0], points[1][1])
         else:
           print("two positions for cropping are not selected yet")
-          warning_message = ["not selected yet"]
           continue
 
       elif k == ord("c"):
         print("'c' is pressed. selected points are cleared")
         points.clear()
-        warning_message = ["cleared"]
         continue
 
       elif k == ord("h"):
@@ -1814,7 +1832,6 @@ class CroppingPicture:
     """
     W, H = img.shape[1], img.shape[0]
     points: List[Tuple[int, int]] = []
-    warning_message: List[str] = []
 
     cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
     cv2.setMouseCallback(picture, mouse_on_select_positions, points)
@@ -1822,7 +1839,7 @@ class CroppingPicture:
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select two positions in GUI window!")
+    print("select two positions in GUI window! (2nd must be > 1st)")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -1835,7 +1852,6 @@ class CroppingPicture:
       elif len(points) == 2:
         if points[1][1] <= points[0][1] or points[1][0] <= points[0][0]:
           points.clear()
-          warning_message = ["2nd must be > 1st"]
         else:
           cv2.line(img_show, (points[0][0], 0), (points[0][0], H - 1), line_color, 2)
           cv2.line(img_show, (0, points[0][1]), (W - 1, points[0][1]), line_color, 2)
@@ -1843,7 +1859,6 @@ class CroppingPicture:
           cv2.line(img_show, (0, points[1][1]), (W - 1, points[1][1]), line_color, 2)
       elif len(points) == 3:
         points.clear()
-        warning_message = ["3rd is not accepted"]
 
       if help_exists:
         add_texts_lower_right(
@@ -1859,7 +1874,7 @@ class CroppingPicture:
         add_texts_upper_left(
           img_show, ["[crop]", "select two positions"],
         )
-        add_texts_lower_left(img_show, warning_message)
+
         if len(points) == 1:
           add_texts_upper_right(
             img_show, ["selected:", "[{0},{1}]".format(points[0][0], points[0][1])]
@@ -1885,13 +1900,11 @@ class CroppingPicture:
           return (points[0][0], points[0][1], points[1][0], points[1][1])
         else:
           print("two positions for cropping are not selected yet")
-          warning_message = ["not selected yet"]
           continue
 
       elif k == ord("c"):
         print("'c' is pressed. selected points are cleared")
         points.clear()
-        warning_message = ["cleared"]
         continue
 
       elif k == ord("h"):
@@ -2008,12 +2021,11 @@ class CroppingPictureDirectory:
     cv2.createTrackbar("frame s\n", directory, 0, tick_s, no)
 
     points: List[Tuple[int, int]] = []
-    warning_message: List[str] = []
     cv2.setMouseCallback(directory, mouse_on_select_positions, points)
     line_color = (255, 255, 255)
 
     print("--- crop ---")
-    print("select two positions in GUI window!")
+    print("select two positions in GUI window! (2nd must be > 1st)")
     print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
@@ -2030,7 +2042,6 @@ class CroppingPictureDirectory:
       elif len(points) == 2:
         if points[1][1] <= points[0][1] or points[1][0] <= points[0][0]:
           points.clear()
-          warning_message = ["2nd must be > 1st"]
         else:
           cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), line_color, 2)
           cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), line_color, 2)
@@ -2038,7 +2049,6 @@ class CroppingPictureDirectory:
           cv2.line(img, (0, points[1][1]), (W - 1, points[1][1]), line_color, 2)
       elif len(points) == 3:
         points.clear()
-        warning_message = ["3rd is not accepted"]
 
       if help_exists:
         add_texts_lower_right(
@@ -2054,7 +2064,7 @@ class CroppingPictureDirectory:
         add_texts_upper_left(
           img, ["[crop]", "select two positions", "frame: {0}".format(frame_now)],
         )
-        add_texts_lower_left(img, warning_message)
+
         if len(points) == 1:
           add_texts_upper_right(
             img, ["selected:", "[{0},{1}]".format(points[0][0], points[0][1])]
@@ -2080,13 +2090,11 @@ class CroppingPictureDirectory:
           return (points[0][0], points[0][1], points[1][0], points[1][1])
         else:
           print("two positions for cropping are not selected yet")
-          warning_message = ["not selected yet"]
           continue
 
       elif k == ord("c"):
         print("'c' is pressed. selected points are cleared")
         points.clear()
-        warning_message = ["cleared"]
         continue
 
       elif k == ord("h"):
@@ -2769,6 +2777,7 @@ class RotatingMovie:
         degree = self.select_degree(output_name, frames, fps, cap)
         if degree is None:
           continue
+
         rad = degree / 180.0 * numpy.pi
         sin_rad = numpy.absolute(numpy.sin(rad))
         cos_rad = numpy.absolute(numpy.cos(rad))
@@ -2944,6 +2953,7 @@ class RotatingPicture:
         degree = self.select_degree(name, img)
         if degree is None:
           continue
+
         rad = degree / 180.0 * numpy.pi
         sin_rad = numpy.absolute(numpy.sin(rad))
         cos_rad = numpy.absolute(numpy.cos(rad))
@@ -3083,6 +3093,7 @@ class RotatingPictureDirectory:
         degree = self.select_degree(str(output_path), p_list)
         if degree is None:
           continue
+
         rad = degree / 180.0 * numpy.pi
         sin_rad = numpy.absolute(numpy.sin(rad))
         cos_rad = numpy.absolute(numpy.cos(rad))
@@ -3272,6 +3283,11 @@ class TrimmingMovie:
       frame_now = round(time[0] * fps)
       frame_end = round(time[1] * fps)
       if frames < frame_now or frames < frame_end:
+        print(
+          "start & stop frames ({0},{1}) must be < max frame ({2})".format(
+            frame_now, frame_end, frames
+          )
+        )
         continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
@@ -3317,7 +3333,6 @@ class TrimmingMovie:
     tick_s = (int)(frames / division) + 1
     is_start_on, is_stop_on = False, False
     start_time, stop_time = 0.0, 0.0
-    warning_message: List[str] = []
 
     cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
     cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
@@ -3361,18 +3376,18 @@ class TrimmingMovie:
           ],
         )
         add_texts_lower_right(img, ["s: save", "q/esc: abort"])
-        add_texts_lower_left(img, warning_message)
 
       cv2.imshow(movie, img)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
         if (not is_start_on) or (not is_stop_on):
-          warning_message = ["start-stop not selected"]
+          print("start & stop are not selected!")
           continue
         if stop_time <= start_time:
-          warning_message = ["stop must be > start"]
+          print("stop must be > start")
           continue
+
         print("'s' is pressed. trim parameters are saved")
         cv2.destroyAllWindows()
         return (start_time, stop_time)
