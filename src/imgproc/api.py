@@ -338,3 +338,36 @@ def rotate(
       return_list.extend(r)
 
   return return_list if return_list else None
+
+
+def trim(
+  target_list: List[str],
+  *,
+  is_colored: bool = False,
+  times: Tuple[float, float] = None,
+):
+  """api to trim movies (note: keyword-only argument)
+
+  Args:
+      target_list (List[str]): list of movie-file paths.
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      times (Tuple[float, float], optional): [start, stop] parameters for trimming movie (s). Start must be smaller than stop. Defaults to None. If this variable is None, this will be selected using GUI window
+
+  Returns:
+      return (List[str], optional): list of processed movies. if no process is executed, None is returned
+  """
+  return_list: List[str] = []
+  if not target_list:
+    sys.exit("no target is given!")
+  m_list, p_list, d_list = process.sort_target_type(target_list)
+  if not m_list:
+    sys.exit("no movie is given!")
+
+  if m_list:
+    r = process.TrimmingMovie(
+      target_list=m_list, is_colored=is_colored, times=times
+    ).execute()
+    if r is not None:
+      return_list.extend(r)
+
+  return return_list if return_list else None

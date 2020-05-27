@@ -1009,6 +1009,9 @@ class CapturingMovie:
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
+        if (not is_start_on) or (not is_stop_on):
+          warning_message = ["start-stop not selected"]
+          continue
         if stop_time - start_time <= time_step:
           warning_message = ["stop-start must be > step"]
           continue
@@ -3207,3 +3210,186 @@ def get_rotated_image(
   affine_matrix[0][2] = affine_matrix[0][2] - W / 2 + W_rot / 2
   affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
   return cv2.warpAffine(img, affine_matrix, size_rot, flags=cv2.INTER_CUBIC)
+
+
+class TrimmingMovie:
+  """class to trim movie"""
+
+  def __init__(
+    self,
+    *,
+    target_list: Optional[List[str]] = None,
+    is_colored: bool = False,
+    times: Optional[Tuple[float, float]] = None,
+  ):
+    """constructor
+
+    Args:
+        movie_list (List[str], optional): list of movies. Defaults to None.
+        is_colored (bool, optional):  flag to output in color. Defaults to False.
+        times (Tuple[float, float], optional): [start, stop] parameters for trimming movie (s). If this variable is None, this will be selected using GUI window Defaults to None.
+    """
+    self.__target_list = target_list
+    self.__is_colored = is_colored
+    self.__times = times
+
+  def get_target_list(self) -> Optional[List[str]]:
+    return self.__target_list
+
+  def is_colored(self) -> bool:
+    return self.__is_colored
+
+  def get_times(self) -> Optional[Tuple[float, float]]:
+    return self.__times
+
+  def execute(self):
+    """trimming process
+
+    Returns:
+        Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
+    """
+    if self.get_times() is not None:
+      time = self.get_times()
+
+      if time[1] <= time[0]:
+        print("stop must be > start")
+        return None
+
+    output_path_list = get_output_path(self.get_target_list(), "trimmed")
+    return_list: List[str] = []
+
+    for movie, output_path in zip(self.get_target_list(), output_path_list):
+
+      output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
+      cap = cv2.VideoCapture(movie)
+      W, H, frames, fps = get_movie_info(cap)
+
+      if self.get_times() is None:
+        time = self.select_times(str(output_path), frames, fps, cap)
+        if time is None:
+          continue
+
+      frame_now = round(time[0] * fps)
+      frame_end = round(time[1] * fps)
+      if frames < frame_now or frames < frame_end:
+        continue
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      return_list.append(output_name)
+      prepare_output_directory(output_path)
+      fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.is_colored())
+      print("trimming movie '{0}'...".format(movie))
+
+      while frame_now <= frame_end:
+
+        ret, frame = cap.read()
+        frame_now = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        if not ret:
+          break
+
+        output.write(
+          frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        )
+
+    return return_list if return_list else None
+
+  def select_times(
+    self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
+  ) -> Optional[Tuple[float, float]]:
+    """select(get) parametes for trimming using GUI window
+
+    Args:
+        movie (str): movie file name
+        frames (int): total frame of movie
+        fps (float): fps of movie
+        cap (cv2.VideoCapture): cv2 video object
+
+    Returns:
+        Optional[Tuple[float, float]]: [start, stop] times for trimming movie (s).
+    """
+    cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(movie, 500, 700)
+    help_exists = False
+
+    division = 100
+    tick = division if division < frames else frames
+    tick_s = (int)(frames / division) + 1
+    is_start_on, is_stop_on = False, False
+    start_time, stop_time = 0.0, 0.0
+    warning_message: List[str] = []
+
+    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
+    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
+    cv2.createTrackbar("start cap\n", movie, 0, 1, no)
+    cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
+    print("--- trim ---")
+    print("select time (start, stop) in GUI window!")
+    print("(s: save if selected, h:on/off help, q/esc: abort)")
+
+    while True:
+
+      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
+      frame_s = cv2.getTrackbarPos("frame s\n", movie)
+      frame_now = frame + frame_s if frame + frame_s < frames else frames
+
+      if not is_start_on:
+        if cv2.getTrackbarPos("start cap\n", movie):
+          is_start_on, start_time = True, frame_now / fps
+      else:
+        if not cv2.getTrackbarPos("start cap\n", movie):
+          is_start_on, start_time = False, 0.0
+      if not is_stop_on:
+        if cv2.getTrackbarPos("stop cap\n", movie):
+          is_stop_on, stop_time = True, frame_now / fps
+      else:
+        if not cv2.getTrackbarPos("stop cap\n", movie):
+          is_stop_on, stop_time = False, 0.0
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      ret, img = cap.read()
+
+      if help_exists:
+        add_texts_upper_left(
+          img,
+          [
+            "[trim]",
+            "select start,stop",
+            "now: {0:.2f}s".format(frame_now / fps),
+            "start: {0:.2f}s".format(start_time),
+            "stop: {0:.2f}s".format(stop_time),
+          ],
+        )
+        add_texts_lower_right(img, ["s: save", "q/esc: abort"])
+        add_texts_lower_left(img, warning_message)
+
+      cv2.imshow(movie, img)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+        if (not is_start_on) or (not is_stop_on):
+          warning_message = ["start-stop not selected"]
+          continue
+        if stop_time <= start_time:
+          warning_message = ["stop must be > start"]
+          continue
+        print("'s' is pressed. trim parameters are saved")
+        cv2.destroyAllWindows()
+        return (start_time, stop_time)
+
+      elif k == ord("h"):
+        if help_exists:
+          help_exists = False
+        else:
+          help_exists = True
+        continue
+
+      elif k == ord("q"):
+        cv2.destroyAllWindows()
+        print("'q' is pressed. abort")
+        return None
+
+      elif k == 27:
+        cv2.destroyAllWindows()
+        print("'Esc' is pressed. abort")
+        return None

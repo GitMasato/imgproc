@@ -206,6 +206,20 @@ def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
     ).execute()
 
 
+def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
+  """call function when trim command is given
+  """
+  call_check_arg("trim", args, parser)
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+  if not m_list:
+    sys.exit("no movie is given!")
+
+  if m_list:
+    process.TrimmingMovie(
+      target_list=m_list, is_colored=args.color, times=args.time
+    ).execute()
+
+
 def cli_execution():
   """read, parse, and execute cli arguments
   """
@@ -226,25 +240,22 @@ def cli_execution():
       type=str,
       default=None,
       metavar="path",
-      help="path of movie, picture, or directory where pictures are stored"
-      + "\nIf directory name is given,"
-      + "\nsame process will be applied to all pictures in the directory"
-      + "\n ",
+      help="path of movie, picture, or directory where pictures are stored\n"
+      + "If directory name is given,\n"
+      + "same process will be applied to all pictures in the directory\n",
     )
 
   def add_argument_color(parser: argparse.ArgumentParser):
     parser.add_argument(
       "--color",
       action="store_true",
-      help="to output in color (default=false (gray))" + "\n ",
+      help="to output in color (default=false (gray))\n",
     )
 
   parser_animate = subparsers.add_parser(
     "animate",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to crate movie (mp4) from pictures"
-    + "\n(see sub-option 'animate -h')"
-    + "\n ",
+    help="to crate movie (mp4) from pictures\n" + "(see sub-option 'animate -h')\n",
     description="sub-command 'animate': to crate movie (mp4) from pictures",
   )
   add_argument_target(parser_animate)
@@ -255,15 +266,14 @@ def cli_execution():
     type=float,
     default=None,
     metavar="fps",
-    help="fps of created movie (float)"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="fps of created movie (float)\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_binarize = subparsers.add_parser(
     "binarize",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to binarize picture/movie" + "\n(see sub-option 'binarize -h')" + "\n ",
+    help="to binarize picture/movie\n(see sub-option 'binarize -h')\n ",
     description="sub-command 'binarize': to binarize picture/movie",
   )
   add_argument_target(parser_binarize)
@@ -274,15 +284,14 @@ def cli_execution():
     type=int,
     default=None,
     metavar=("low", "high"),
-    help="thresholds of gray-scale luminance (int) [0-255]"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="thresholds of gray-scale luminance (int) [0-255]\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_capture = subparsers.add_parser(
     "capture",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to capture movie" + "\n(see sub-option 'capture -h')" + "\n ",
+    help="to capture movie\n(see sub-option 'capture -h')\n ",
     description="sub-command 'capture': to capture movie",
   )
   add_argument_target(parser_capture)
@@ -294,18 +303,17 @@ def cli_execution():
     type=float,
     default=None,
     metavar=("start", "stop", "step"),
-    help="time at beginning and end of capture and time step (float) [s]"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="time at beginning and end of capture and time step (float) [s]\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_concatenate = subparsers.add_parser(
     "concatenate",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to concatenate movie/picture" + "\n(see sub-option 'crop -h')" + "\n ",
-    description="sub-command 'concatenate': to concatenate movie/picture"
-    + "\n\nmax number of targets is 25."
-    + "\nsizes of pictures are adjusted based on first target size.",
+    help="to concatenate movie/picture\n(see sub-option 'crop -h')\n ",
+    description="sub-command 'concatenate': to concatenate movie/picture\n\n"
+    + "max number of targets is 25.\n"
+    + "sizes of pictures are adjusted based on first target size.\n",
   )
   add_argument_target(parser_concatenate)
   add_argument_color(parser_concatenate)
@@ -315,16 +323,15 @@ def cli_execution():
     type=int,
     default=None,
     metavar=("x"),
-    help="number of targets concatenated in x direction"
-    + "\nmax number of targets in each direction is 25."
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="number of targets concatenated in x direction\n"
+    + "max number of targets in each direction is 25.\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_crop = subparsers.add_parser(
     "crop",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to crop movie/picture" + "\n(see sub-option 'crop -h')" + "\n ",
+    help="to crop movie/picture\n(see sub-option 'crop -h')\n ",
     description="sub-command 'crop': to crop movie/picture",
   )
   add_argument_target(parser_crop)
@@ -336,17 +343,15 @@ def cli_execution():
     type=int,
     default=None,
     metavar=("x_1", "y_1", "x_2", "y_2"),
-    help="position of cropping (int) [pixel, 1 < 2]"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="position of cropping (int) [pixel, 1 < 2]\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_hist_luminance = subparsers.add_parser(
     "hist-luminance",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to create luminance histgram of picture"
-    + "\n(see sub-option 'hist-luminance -h')"
-    + "\n ",
+    help="to create luminance histgram of picture\n"
+    + "(see sub-option 'hist-luminance -h')\n",
     description="sub-command 'hist_luminance': to create luminance histgram of picture",
   )
   add_argument_target(parser_hist_luminance)
@@ -356,7 +361,7 @@ def cli_execution():
   parser_resize = subparsers.add_parser(
     "resize",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to resize movie/picture" + "\n(see sub-option 'resize -h')" + "\n ",
+    help="to resize movie/picture\n(see sub-option 'resize -h')\n ",
     description="sub-command 'resize': to resize movie/picture",
   )
   add_argument_target(parser_resize)
@@ -368,15 +373,14 @@ def cli_execution():
     type=float,
     default=None,
     metavar=("x", "y"),
-    help="scaling ratio (float) [x,y]"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="scaling ratio (float) [x,y]\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   parser_rotate = subparsers.add_parser(
     "rotate",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to rotate movie/picture" + "\n(see sub-option 'rotate -h')",
+    help="to rotate movie/picture\n(see sub-option 'rotate -h')\n",
     description="sub-command 'rotate': to rotate movie/picture",
   )
   add_argument_target(parser_rotate)
@@ -387,9 +391,27 @@ def cli_execution():
     type=float,
     default=None,
     metavar=("degree"),
-    help="degree of rotation (float) [degree]"
-    + "\nif this is not given, you will select this in GUI window"
-    + "\n ",
+    help="degree of rotation (float) [degree]\n"
+    + "if this is not given, you will select this in GUI window\n",
+  )
+
+  parser_trim = subparsers.add_parser(
+    "trim",
+    formatter_class=argparse.RawTextHelpFormatter,
+    help="to trim movie (mp4)\n(see sub-option 'trim -h')\n ",
+    description="sub-command 'trim': to trim movie (mp4)",
+  )
+  add_argument_target(parser_trim)
+  add_argument_color(parser_trim)
+  parser_trim.set_defaults(call=call_trim)
+  parser_trim.add_argument(
+    "--time",
+    nargs=2,
+    type=float,
+    default=None,
+    metavar=("start", "stop"),
+    help="time at beginning and end of trim (float) [s]\n"
+    + "if this is not given, you will select this in GUI window\n",
   )
 
   if len(sys.argv) <= 1:
