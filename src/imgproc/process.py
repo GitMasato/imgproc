@@ -5,9 +5,274 @@ import imghdr
 import math
 import numpy
 import pathlib
-import shutil
 from matplotlib import pyplot
 from typing import List, Optional, Protocol, Tuple
+
+
+def sort_target_type(target_list: List[str]) -> Tuple[List[str], List[str], List[str]]:
+  """sort input by type
+
+  Args:
+      target_list (List[str]): list of pictures or movies or directories where pictures are stored
+
+  Returns:
+      Tuple[List[str], List[str], List[str]]: list of movies, pictures, and directories
+  """
+  movie_list: List[str] = []
+  picture_list: List[str] = []
+  directory_list: List[str] = []
+
+  for target in target_list:
+    target_path = pathlib.Path(target)
+
+    if target_path.is_dir():
+      directory_list.append(target)
+    elif target_path.is_file():
+      image_type = imghdr.what(target)
+      if image_type is not None:
+        picture_list.append(target)
+      else:
+        movie_list.append(target)
+
+  return (movie_list, picture_list, directory_list)
+
+
+def get_movie_info(cap: cv2.VideoCapture) -> Tuple[int, int, int, float]:
+  """get movie information
+
+  Args:
+      cap (cv2.VideoCapture): cv2 video object
+
+  Returns:
+      Tuple[int, int, int, float]: W, H, total frame, fps of movie
+  """
+  W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
+  H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
+  fps = cap.get(cv2.CAP_PROP_FPS)
+  temp_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
+  temp_frames = temp_frames - int(fps) if int(fps) <= temp_frames else temp_frames
+  cap.set(cv2.CAP_PROP_POS_FRAMES, temp_frames)
+
+  # CAP_PROP_FRAME_COUNT is usually not correct.
+  # so take temporal frame number first, then find the correct number
+  while True:
+    ret, frame = cap.read()
+    if not ret:
+      break
+
+  frames = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
+  cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+
+  return (W, H, frames, fps)
+
+
+def get_output_path(target_list: List[str], output: str) -> List[pathlib.Path]:
+  """get output path list
+
+  Args:
+      target_list (List[str]): list of pictures or movies or directories where pictures are stored
+      output (str): name of the lowest level directory (without path)
+
+  Returns:
+      List[pathlib.Path]: list of pathlib.Path object
+  """
+  output_path_list: List[pathlib.Path] = []
+
+  for target in target_list:
+    target_path = pathlib.Path(target).resolve()
+
+    if not target_path.is_dir() and not target_path.is_file():
+      print("'{0}' does not exist!".format(str(target_path)))
+      continue
+
+    layers = target_path.parts
+
+    if "cv2" in layers:
+      p_path = target_path.parents[1] if target_path.is_file() else target_path.parent
+      output_path_list.append(pathlib.Path(p_path / output))
+    else:
+      p = target_path.stem if target_path.is_file() else target_path.name
+      output_path_list.append(pathlib.Path(pathlib.Path.cwd() / "cv2" / p / output))
+
+  for output_path in output_path_list:
+    output_path.mkdir(parents=True, exist_ok=True)
+
+  return output_path_list
+
+
+def get_rotated_size(W: int, H: int, degree: float) -> Tuple[int, int]:
+  """get size of rotated frame
+
+  Args:
+      W (int): width
+      H (int): height
+      degree (float): degree of rotation
+
+  Returns:
+      Tuple[int, int]: [size of W rotated, size of H rotated]
+  """
+  rad = degree / 180.0 * numpy.pi
+  sin_rad = numpy.absolute(numpy.sin(rad))
+  cos_rad = numpy.absolute(numpy.cos(rad))
+  W_rot = int(numpy.round(H * sin_rad + W * cos_rad))
+  H_rot = int(numpy.round(H * cos_rad + W * sin_rad))
+  return (W_rot, H_rot)
+
+
+def get_rotate_affine_matrix(
+  center: Tuple[int, int], center_rot: Tuple[int, int], degree: float
+) -> numpy.array:
+  """get affine_matrix to rotate picture
+
+  Args:
+      center (Tuple[int,int]): center position of picture before rotation [W, H]
+      center_rot (Tuple[int,int]): center position of picture after rotation [W, H]
+      degree (float): degree of rotation
+
+  Returns:
+      numpy.array: affine_matrix
+  """
+  rotation_matrix = cv2.getRotationMatrix2D(center, degree, 1.0)
+  affine_matrix = rotation_matrix.copy()
+  affine_matrix[0][2] = affine_matrix[0][2] - center[0] + center_rot[0]
+  affine_matrix[1][2] = affine_matrix[1][2] - center[1] + center_rot[1]
+  return affine_matrix
+
+
+def get_rotated_frame(img: numpy.array, degree: float) -> numpy.array:
+  """get rotated cv2 object
+
+  Args:
+      img (numpy.array): cv2 object
+      degree (float): degree of rotation
+
+  Returns:
+      numpy.array: rotated cv2 object
+  """
+  W, H = img.shape[1], img.shape[0]
+  size_rot = get_rotated_size(W, H, degree)
+  center_rot = (int(size_rot[0] / 2), int(size_rot[1] / 2))
+  affine = get_rotate_affine_matrix((int(W / 2), int(H / 2)), center_rot, degree)
+  return cv2.warpAffine(img, affine, size_rot, flags=cv2.INTER_CUBIC)
+
+
+def no(no):
+  """call back function and meaningless"""
+  pass
+
+
+def mouse_on_select_positions(event, x, y, flags, params):
+  """call back function on mouse click
+  """
+  points = params
+
+  if event == cv2.EVENT_LBUTTONUP:
+    points.append([x, y])
+
+
+def press_q_or_Esc(key_input: int) -> bool:
+  """call back function when to press q or Esq"""
+
+  if key_input == ord("q"):
+    cv2.destroyAllWindows()
+    print("'q' is pressed. abort")
+    return True
+
+  elif key_input == 27:
+    cv2.destroyAllWindows()
+    print("'Esc' is pressed. abort")
+    return True
+
+  else:
+    return False
+
+
+def create_frame_trackbars(cv2_window: str, input_frames: int):
+  """add 'frame\n' and 'frame s\n' trackbars for cv2 GUI"""
+  tick = 100 if 100 < input_frames else input_frames
+  cv2.createTrackbar("frame\n", cv2_window, 0, tick - 1, no)
+  cv2.createTrackbar("frame s\n", cv2_window, 0, (int)(input_frames / 100) + 1, no)
+
+
+def get_value_from_frame_trackbars(cv2_window: str, input_frames: int) -> int:
+  """get values from 'frame\n' and 'frame s\n' trackbars"""
+  division_number = (int)(input_frames / 100) + 1
+  frame = cv2.getTrackbarPos("frame\n", cv2_window) * division_number
+  frame_s = cv2.getTrackbarPos("frame s\n", cv2_window)
+  tgt_frame = frame + frame_s if frame + frame_s < input_frames else input_frames
+  return tgt_frame
+
+
+def create_scale_trackbars(cv2_window: str):
+  """add 'scale x\n*0.1', 'scale x\n*1.0', 'scale y\n*0.1', 'scale y\n*1.0' trackbars for cv2 GUI"""
+  cv2.createTrackbar("scale x\n*0.1", cv2_window, 10, 10, no)
+  cv2.createTrackbar("scale x\n*1.0", cv2_window, 1, 10, no)
+  cv2.createTrackbar("scale y\n*0.1", cv2_window, 10, 10, no)
+  cv2.createTrackbar("scale y\n*1.0", cv2_window, 1, 10, no)
+
+
+def get_values_from_scale_trackbars(cv2_window: str) -> Tuple[float, float]:
+  """get values from 'scale x\n*0.1', 'scale x\n*1.0', 'scale y\n*0.1', 'scale y\n*1.0' trackbars"""
+  s_x_01 = cv2.getTrackbarPos("scale x\n*0.1", cv2_window)
+  s_x_10 = cv2.getTrackbarPos("scale x\n*1.0", cv2_window)
+  s_y_01 = cv2.getTrackbarPos("scale y\n*0.1", cv2_window)
+  s_y_10 = cv2.getTrackbarPos("scale y\n*1.0", cv2_window)
+  s_x = (1 if s_x_01 == 0 else s_x_01) * 0.1 * (1 if s_x_10 == 0 else s_x_10)
+  s_y = (1 if s_y_01 == 0 else s_y_01) * 0.1 * (1 if s_y_10 == 0 else s_y_10)
+  return s_x, s_y
+
+
+def create_degree_trackbars(cv2_window: str):
+  """add 'degree\n' and 'degree s\n' trackbars for cv2 GUI"""
+  cv2.createTrackbar("degree\n", cv2_window, 0, 4, no)
+  cv2.createTrackbar("degree s\n", cv2_window, 0, 90, no)
+
+
+def get_value_from_degree_trackbars(cv2_window: str) -> int:
+  """get value from 'degree\n' and 'degree s\n' trackbars"""
+  degree_l = cv2.getTrackbarPos("degree\n", cv2_window) * 90
+  degree_s = cv2.getTrackbarPos("degree s\n", cv2_window)
+  return degree_l + degree_s
+
+
+def get_values_from_bool_trackbar(
+  cv2_window: str, trackbar_name: str, is_trackbar_on: bool
+) -> Tuple[bool, bool]:
+  """get bool values ([bool status, if status is changed]) from bool trackbar"""
+  if not is_trackbar_on:
+    if cv2.getTrackbarPos(trackbar_name, cv2_window):
+      return True, True
+    else:
+      return False, False
+  else:
+    if not cv2.getTrackbarPos(trackbar_name, cv2_window):
+      return False, True
+    else:
+      return True, False
+
+
+def create_start_bool_trackbar(cv2_window: str):
+  """add 'start cap\n' trackbar for cv2 GUI"""
+  cv2.createTrackbar("start cap\n", cv2_window, 0, 1, no)
+
+
+def get_values_from_start_trackbar(
+  cv2_window: str, is_start_on: bool
+) -> Tuple[bool, bool]:
+  """get values from 'start cap\n' trackbar"""
+  return get_values_from_bool_trackbar(cv2_window, "start cap\n", is_start_on)
+
+
+def create_stop_bool_trackbar(cv2_window: str):
+  """add 'stop cap\n' trackbar for cv2 GUI"""
+  cv2.createTrackbar("stop cap\n", cv2_window, 0, 1, no)
+
+
+def get_values_from_stop_trackbar(
+  cv2_window: str, is_stop_on: bool
+) -> Tuple[bool, bool]:
+  """get values from 'stop cap\n' trackbar"""
+  return get_values_from_bool_trackbar(cv2_window, "stop cap\n", is_stop_on)
 
 
 def add_texts(image: numpy.array, texts: List[str], position: Tuple[int, int]):
@@ -73,113 +338,6 @@ def add_texts_lower_right(image: numpy.array, texts: List[str]):
   add_texts(image, texts, pos)
 
 
-def get_movie_info(cap: cv2.VideoCapture) -> Tuple[int, int, int, float]:
-  """get movie information
-
-  Args:
-      cap (cv2.VideoCapture): cv2 video object
-
-  Returns:
-      Tuple[int, int, int, float]: W, H, total frame, fps of movie
-  """
-  W = int(cap.get(cv2.CAP_PROP_FRAME_WIDTH))
-  H = int(cap.get(cv2.CAP_PROP_FRAME_HEIGHT))
-  fps = cap.get(cv2.CAP_PROP_FPS)
-  temp_frames = cap.get(cv2.CAP_PROP_FRAME_COUNT)
-  temp_frames = temp_frames - int(fps) if int(fps) <= temp_frames else temp_frames
-  cap.set(cv2.CAP_PROP_POS_FRAMES, temp_frames)
-
-  # CAP_PROP_FRAME_COUNT is usually not correct.
-  # so take temporal frame number first, then find the correct number
-  while True:
-    ret, frame = cap.read()
-    if not ret:
-      break
-
-  frames = int(cap.get(cv2.CAP_PROP_POS_FRAMES)) - 1
-  cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-
-  return (W, H, frames, fps)
-
-
-def get_output_path(target_list: List[str], output: str) -> List[pathlib.Path]:
-  """get output path list
-
-  Args:
-      target_list (List[str]): list of pictures or movies or directories where pictures are stored
-      output (str): name of the lowest level directory (without path)
-
-  Returns:
-      List[pathlib.Path]: list of pathlib.Path object
-  """
-  path_list: List[pathlib.Path] = []
-
-  for target in target_list:
-    target_path = pathlib.Path(target).resolve()
-
-    if not target_path.is_dir() and not target_path.is_file():
-      print("'{0}' does not exist!".format(str(target_path)))
-      continue
-
-    layers = target_path.parts
-
-    if "cv2" in layers:
-      p_path = target_path.parents[1] if target_path.is_file() else target_path.parent
-      path_list.append(pathlib.Path(p_path / output))
-    else:
-      p = target_path.stem if target_path.is_file() else target_path.name
-      path_list.append(pathlib.Path(pathlib.Path.cwd() / "cv2" / p / output))
-
-  return path_list
-
-
-def sort_target_type(target_list: List[str]) -> Tuple[List[str], List[str], List[str]]:
-  """get output path list
-
-  Args:
-      target_list (List[str]): list of pictures or movies or directories where pictures are stored
-
-  Returns:
-      Tuple[List[str], List[str], List[str]]: list of movies, pictures, and directories
-  """
-  movie_list: List[str] = []
-  picture_list: List[str] = []
-  directory_list: List[str] = []
-
-  for target in target_list:
-    target_path = pathlib.Path(target)
-
-    if target_path.is_dir():
-      directory_list.append(target)
-    elif target_path.is_file():
-      image_type = imghdr.what(target)
-      if image_type is not None:
-        picture_list.append(target)
-      else:
-        movie_list.append(target)
-
-  return (movie_list, picture_list, directory_list)
-
-
-def prepare_output_directory(output_directory_path: pathlib.Path):
-  """clean output directory
-
-  Args:
-      output_directory_path (pathlib.Path): output directory path
-  """
-  if not output_directory_path.is_dir():
-    output_directory_path.mkdir(parents=True)
-  else:
-    if list(output_directory_path.iterdir()):
-      shutil.rmtree(output_directory_path)
-      output_directory_path.mkdir()
-
-
-def no(no):
-  """meaningless function just for trackbar callback"""
-  pass
-
-
 class ABCProcess(Protocol):
   """abstract base class for image processing class"""
 
@@ -205,16 +363,16 @@ class AnimatingPicture:
         fps (Optional[float], optional): fps of created movie. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__fps = fps
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_fps(self) -> Optional[float]:
+  def __get_fps(self) -> Optional[float]:
     return self.__fps
 
   def execute(self):
@@ -223,7 +381,7 @@ class AnimatingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    pictures = self.get_target_list()
+    pictures = self.__get_target_list()
     output_path_list = get_output_path(pictures, "animated")
     W_list: List[int] = []
     H_list: List[int] = []
@@ -231,8 +389,8 @@ class AnimatingPicture:
       str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).stem)) + ".mp4"
     )
 
-    if self.get_fps() is not None:
-      fps = self.get_fps()
+    if self.__get_fps() is not None:
+      fps = self.__get_fps()
     else:
       fps = select_fps(name, pictures)
 
@@ -247,17 +405,17 @@ class AnimatingPicture:
 
     W = max(W_list)
     H = max(H_list)
-    prepare_output_directory(output_path_list[0])
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output = cv2.VideoWriter(name, fourcc, fps, (W, H), self.is_colored())
+    output = cv2.VideoWriter(name, fourcc, fps, (W, H), self.__is_colored())
     print("animating pictures...")
 
     for picture in pictures:
+
       img = cv2.imread(picture)
       img_show = numpy.zeros((H, W, 3), numpy.uint8)
       img_show[: img.shape[0], : img.shape[1]] = img[:]
       output.write(
-        img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
+        img_show if self.__is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
       )
 
     return [name]
@@ -281,16 +439,16 @@ class AnimatingPictureDirectory:
         fps (Optional[float], optional): fps of created movie. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__fps = fps
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_fps(self) -> Optional[float]:
+  def __get_fps(self) -> Optional[float]:
     return self.__fps
 
   def execute(self):
@@ -299,7 +457,7 @@ class AnimatingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    directories = self.get_target_list()
+    directories = self.__get_target_list()
     output_path_list = get_output_path(directories, "animated")
     return_list: List[str] = []
 
@@ -308,14 +466,16 @@ class AnimatingPictureDirectory:
       directory_path = pathlib.Path(directory)
       output_name = str(pathlib.Path(output_path / directory_path.name)) + ".mp4"
       p_list = [str(p) for p in list(directory_path.iterdir())]
+
       if not p_list:
         print("no file exists in '{0}'!".format(directory))
         continue
 
-      if self.get_fps() is not None:
-        fps = self.get_fps()
+      if self.__get_fps() is not None:
+        fps = self.__get_fps()
       else:
         fps = select_fps(output_name, p_list)
+
       if fps is None:
         continue
 
@@ -330,58 +490,53 @@ class AnimatingPictureDirectory:
       W = max(W_list)
       H = max(H_list)
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.__is_colored())
       print("animating pictures... in '{0}'".format(directory))
 
       for picture in p_list:
+
         img = cv2.imread(picture)
         img_show = numpy.zeros((H, W, 3), numpy.uint8)
         img_show[0 : img.shape[0], 0 : img.shape[1]] = img[:]
         output.write(
-          img_show if self.is_colored() else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
+          img_show
+          if self.__is_colored()
+          else cv2.cvtColor(img_show, cv2.COLOR_BGR2GRAY)
         )
 
     return return_list if return_list else None
 
 
-def select_fps(
-  movie_name: str, picture_path_list: List[pathlib.Path]
-) -> Optional[float]:
+def select_fps(movie: str, picture_path_list: List[pathlib.Path]) -> Optional[float]:
   """select(get) fps for animating using GUI window
 
   Args:
-      movie_name (str): movie name
+      movie (str): movie name
       picture_path_list (List[pathlib.Path]): picture path list
 
   Returns:
       Optional[float]: fps of movie
   """
-  cv2.namedWindow(movie_name, cv2.WINDOW_NORMAL)
-  cv2.resizeWindow(movie_name, 500, 700)
+  cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
+  cv2.resizeWindow(movie, 500, 700)
   help_exists = False
 
   frames = len(picture_path_list) - 1
-  division = 50
-  tick = division if division < frames else frames
-  tick_s = (int)(frames / division) + 1
-  cv2.createTrackbar("frame\n", movie_name, 0, tick - 1, no)
-  cv2.createTrackbar("frame s\n", movie_name, 0, tick_s, no)
-  cv2.createTrackbar("fps\n", movie_name, 10, 50, no)
+
+  create_frame_trackbars(movie, frames)
+  cv2.createTrackbar("fps\n", movie, 10, 50, no)
 
   print("--- animate ---")
   print("select fps in GUI window!")
-  print("(s: save if selected, h:on/off help, q/esc: abort)")
+  print("(s: save, h:on/off help, q/esc: abort)")
 
   while True:
 
-    frame = cv2.getTrackbarPos("frame\n", movie_name) * tick_s
-    frame_s = cv2.getTrackbarPos("frame s\n", movie_name)
-    frame_now = frame + frame_s if frame + frame_s < frames else frames
-    fps_read = cv2.getTrackbarPos("fps\n", movie_name)
+    tgt_frame = get_value_from_frame_trackbars(movie, frames)
+    fps_read = cv2.getTrackbarPos("fps\n", movie)
     fps = 1 if fps_read == 0 else fps_read
-    img = cv2.imread(str(picture_path_list[frame_now]))
+    img = cv2.imread(str(picture_path_list[tgt_frame]))
 
     if help_exists:
       add_texts_upper_left(
@@ -389,36 +544,26 @@ def select_fps(
         [
           "[animate]",
           "select fps",
-          "now: {0}".format(frame_now),
+          "now: {0}".format(tgt_frame),
           "fps: {0}".format(fps),
         ],
       )
-      add_texts_lower_right(img, ["s:save if selected", "h:on/off help", "q/esc:abort"])
+      add_texts_lower_right(img, ["s:save", "h:on/off help", "q/esc:abort"])
 
-    cv2.imshow(movie_name, img)
+    cv2.imshow(movie, img)
     k = cv2.waitKey(1) & 0xFF
 
     if k == ord("s"):
       print("'s' is pressed. fps is saved ({0})".format(fps))
       cv2.destroyAllWindows()
-      return fps
+      return float(fps)
 
     elif k == ord("h"):
-      if help_exists:
-        help_exists = False
-      else:
-        help_exists = True
-      continue
+      help_exists = False if help_exists else True
 
-    elif k == ord("q"):
-      cv2.destroyAllWindows()
-      print("'q' is pressed. abort")
-      return None
-
-    elif k == 27:
-      cv2.destroyAllWindows()
-      print("'Esq' is pressed. abort")
-      return None
+    else:
+      if press_q_or_Esc(k):
+        None
 
 
 class BinarizingMovie:
@@ -440,10 +585,10 @@ class BinarizingMovie:
     self.__target_list = target_list
     self.__thresholds = thresholds
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+  def __get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
 
   def execute(self):
@@ -452,29 +597,28 @@ class BinarizingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    if self.get_thresholds() is not None:
-      thresholds = self.get_thresholds()
+    if self.__get_thresholds() is not None:
+      thresholds = self.__get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "binarized")
+    output_path_list = get_output_path(self.__get_target_list(), "binarized")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
-      if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(output_name, frames, fps, cap)
+      if self.__get_thresholds() is None:
+        thresholds = self.__select_thresholds(output_name, frames, fps, cap)
         if thresholds is None:
           continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, fps, (int(W), int(H)), False)
       print("binarizing movie '{0}'...".format(movie))
@@ -490,14 +634,14 @@ class BinarizingMovie:
 
     return return_list if return_list else None
 
-  def select_thresholds(
+  def __select_thresholds(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[Tuple[int, int]]:
     """select(get) threshold values for binarization using GUI window
 
     Args:
         movie (str): movie file name
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -508,27 +652,21 @@ class BinarizingMovie:
     cv2.resizeWindow(movie, 500, 700)
     help_exists = False
 
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
+    create_frame_trackbars(movie, frames)
     cv2.createTrackbar("low\n", movie, 0, 255, no)
     cv2.createTrackbar("high\n", movie, 255, 255, no)
 
     print("--- binarize ---")
     print("select threshold (low, high) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
       low = cv2.getTrackbarPos("low\n", movie)
       high = cv2.getTrackbarPos("high\n", movie)
 
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
       ret, bin_1 = cv2.threshold(img, low, 255, cv2.THRESH_TOZERO)
       ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
@@ -539,14 +677,12 @@ class BinarizingMovie:
           [
             "[binarize]",
             "select thresholds",
-            "now: {0:.2f}s".format(frame_now / fps),
+            "now: {0:.2f}s".format(tgt_frame / fps),
             "low: {0}".format(low),
             "high: {0}".format(high),
           ],
         )
-        add_texts_lower_right(
-          bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
+        add_texts_lower_right(bin_2, ["s:save", "h:on/off help", "q/esc:abort"])
 
       cv2.imshow(movie, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -561,21 +697,11 @@ class BinarizingMovie:
         return (low, high)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class BinarizingPicture:
@@ -597,10 +723,10 @@ class BinarizingPicture:
     self.__target_list = target_list
     self.__thresholds = thresholds
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+  def __get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
 
   def execute(self):
@@ -609,13 +735,13 @@ class BinarizingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_thresholds() is not None:
-      thresholds = self.get_thresholds()
+    if self.__get_thresholds() is not None:
+      thresholds = self.__get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
         return None
 
-    pictures = self.get_target_list()
+    pictures = self.__get_target_list()
     output_path_list = get_output_path(pictures, "binarized")
     return_list: List[str] = []
 
@@ -626,13 +752,12 @@ class BinarizingPicture:
       img = cv2.imread(picture)
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
 
-      if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(name, gray)
+      if self.__get_thresholds() is None:
+        thresholds = self.__select_thresholds(name, gray)
         if thresholds is None:
           continue
 
       print("binarizing picture '{0}'...".format(picture))
-      prepare_output_directory(output_path)
       ret, bin_1 = cv2.threshold(gray, thresholds[0], 255, cv2.THRESH_TOZERO)
       ret, bin_2 = cv2.threshold(bin_1, thresholds[1], 255, cv2.THRESH_TOZERO_INV)
       return_list.append(name)
@@ -640,7 +765,7 @@ class BinarizingPicture:
 
     return return_list if return_list else None
 
-  def select_thresholds(
+  def __select_thresholds(
     self, picture: str, img: numpy.array
   ) -> Optional[Tuple[int, int]]:
     """select(get) threshold values for binarization using GUI window
@@ -659,7 +784,7 @@ class BinarizingPicture:
     cv2.createTrackbar("high\n", picture, 255, 255, no)
     print("--- binarize ---")
     print("select threshold (low, high) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
     while True:
 
@@ -670,9 +795,7 @@ class BinarizingPicture:
 
       if help_exists:
         add_texts_upper_left(bin_2, ["binarize:", "select threshold"])
-        add_texts_lower_right(
-          bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
+        add_texts_lower_right(bin_2, ["s:save", "h:on/off help", "q/esc:abort"])
 
       cv2.imshow(picture, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -687,21 +810,11 @@ class BinarizingPicture:
         return (low, high)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class BinarizingPictureDirectory:
@@ -723,10 +836,10 @@ class BinarizingPictureDirectory:
     self.__target_list = target_list
     self.__thresholds = thresholds
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def get_thresholds(self) -> Optional[Tuple[int, int]]:
+  def __get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
 
   def execute(self):
@@ -735,13 +848,13 @@ class BinarizingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_thresholds() is not None:
-      thresholds = self.get_thresholds()
+    if self.__get_thresholds() is not None:
+      thresholds = self.__get_thresholds()
       if thresholds[1] <= thresholds[0]:
         print("high luminance threshold must be > low")
         return (None, [])
 
-    directories = self.get_target_list()
+    directories = self.__get_target_list()
     output_path_list = get_output_path(directories, "binarized")
     return_list: List[str] = []
 
@@ -753,13 +866,12 @@ class BinarizingPictureDirectory:
         print("no file exists in '{0}'!".format(directory))
         continue
 
-      if self.get_thresholds() is None:
-        thresholds = self.select_thresholds(str(output_path), p_list)
+      if self.__get_thresholds() is None:
+        thresholds = self.__select_thresholds(str(output_path), p_list)
         if thresholds is None:
           continue
 
       return_list.append(str(output_path))
-      prepare_output_directory(output_path)
       print("binarizing picture in '{0}'...".format(directory))
 
       for p in p_list:
@@ -771,7 +883,7 @@ class BinarizingPictureDirectory:
 
     return return_list if return_list else None
 
-  def select_thresholds(
+  def __select_thresholds(
     self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[int, int]]:
     """select(get) threshold values for binarization using GUI window
@@ -788,27 +900,22 @@ class BinarizingPictureDirectory:
     help_exists = False
 
     frames = len(picture_list) - 1
-    division = 50
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", directory, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", directory, 0, tick_s, no)
+
+    create_frame_trackbars(directory, frames)
     cv2.createTrackbar("low\n", directory, 0, 255, no)
     cv2.createTrackbar("high\n", directory, 255, 255, no)
 
     print("--- binarize ---")
     print("select threshold (low, high) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", directory)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(directory, frames)
       low = cv2.getTrackbarPos("low\n", directory)
       high = cv2.getTrackbarPos("high\n", directory)
 
-      img = cv2.imread(picture_list[frame_now])
+      img = cv2.imread(picture_list[tgt_frame])
       gray = cv2.cvtColor(img, cv2.COLOR_BGR2GRAY)
       ret, bin_1 = cv2.threshold(gray, low, 255, cv2.THRESH_TOZERO)
       ret, bin_2 = cv2.threshold(bin_1, high, 255, cv2.THRESH_TOZERO_INV)
@@ -819,14 +926,12 @@ class BinarizingPictureDirectory:
           [
             "[binarize]",
             "select thresholds",
-            "now: {0}".format(frame_now),
+            "now: {0}".format(tgt_frame),
             "low: {0}".format(low),
             "high: {0}".format(high),
           ],
         )
-        add_texts_lower_right(
-          bin_2, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
+        add_texts_lower_right(bin_2, ["s:save", "h:on/off help", "q/esc:abort"])
 
       cv2.imshow(directory, bin_2)
       k = cv2.waitKey(1) & 0xFF
@@ -841,21 +946,11 @@ class BinarizingPictureDirectory:
         return (low, high)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class CapturingMovie:
@@ -876,16 +971,16 @@ class CapturingMovie:
         times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). If this variable is None, this will be selected using GUI window Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__times = times
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_times(self) -> Optional[Tuple[float, float, float]]:
+  def __get_times(self) -> Optional[Tuple[float, float, float]]:
     return self.__times
 
   def execute(self):
@@ -894,8 +989,8 @@ class CapturingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (directory) path names
     """
-    if self.get_times() is not None:
-      time = self.get_times()
+    if self.__get_times() is not None:
+      time = self.__get_times()
 
       if time[1] - time[0] <= time[2]:
         print("difference between stop and start must be > time step")
@@ -907,53 +1002,51 @@ class CapturingMovie:
         print("time step must be > 0")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "captured")
+    output_path_list = get_output_path(self.__get_target_list(), "captured")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
-      if self.get_times() is None:
-        time = self.select_times(str(output_path), frames, fps, cap)
-        if time is None:
-          continue
+
+      if self.__get_times() is None:
+        time = self.__select_times(str(output_path), frames, fps, cap)
+
+      if time is None:
+        continue
 
       if frames < round(time[0] * fps) or frames < round(time[1] * fps):
-        print(
-          "start & stop frames ({0},{1}) must be < max frame ({2})".format(
-            round(time[0] * fps), round(time[1] * fps), frames
-          )
-        )
+        f1, f2 = round(time[0] * fps), round(time[1] * fps)
+        print("start & stop ({0},{1}) must be < max frame ({2})".format(f1, f2, frames))
         continue
 
       capture_time = time[0]
       return_list.append(str(output_path))
-      prepare_output_directory(output_path)
       print("capturing movie '{0}'...".format(movie))
 
       while capture_time <= time[1]:
 
         cap.set(cv2.CAP_PROP_POS_FRAMES, round(capture_time * fps))
         ret, frame = cap.read()
-        cv2.imwrite(
-          "{0}/{1:08}_ms.png".format(
-            str(output_path), int(round(capture_time - time[0], 3) * 1000)
-          ),
-          frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY),
-        )
+        if not ret:
+          break
+        pic_time = int(round(capture_time - time[0], 3) * 1000)
+        pic_name = "{0}/{1:08}_ms.png".format(str(output_path), pic_time)
+        f = frame if self.__is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        cv2.imwrite(pic_name, f)
         capture_time += time[2]
 
     return return_list if return_list else None
 
-  def select_times(
+  def __select_times(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[Tuple[float, float, float]]:
     """select(get) parametes for capture using GUI window
 
     Args:
         movie (str): movie file name
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -962,44 +1055,31 @@ class CapturingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = False
-
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    is_start_on, is_stop_on = False, False
+    help_exists, is_start_on, is_stop_on = False, False, False
     start_time, stop_time = 0.0, 0.0
 
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
-    cv2.createTrackbar("start cap\n", movie, 0, 1, no)
-    cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
-    cv2.createTrackbar("step 10ms\n", movie, 100, division, no)
-    print("--- capture ---")
-    print("select time (start, stop, step) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("--- capture ---\nselect time (start, stop, step) in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
+
+    create_frame_trackbars(movie, frames)
+    create_start_bool_trackbar(movie)
+    create_stop_bool_trackbar(movie)
+    cv2.createTrackbar("step 10ms\n", movie, 100, 100, no)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
       time_step = cv2.getTrackbarPos("step 10ms\n", movie) * 10 * 0.001
 
-      if not is_start_on:
-        if cv2.getTrackbarPos("start cap\n", movie):
-          is_start_on, start_time = True, frame_now / fps
-      else:
-        if not cv2.getTrackbarPos("start cap\n", movie):
-          is_start_on, start_time = False, 0.0
-      if not is_stop_on:
-        if cv2.getTrackbarPos("stop cap\n", movie):
-          is_stop_on, stop_time = True, frame_now / fps
-      else:
-        if not cv2.getTrackbarPos("stop cap\n", movie):
-          is_stop_on, stop_time = False, 0.0
+      is_start_on, is_bool_changed = get_values_from_start_trackbar(movie, is_start_on)
+      if is_bool_changed:
+        start_time = tgt_frame / fps if is_start_on else 0.0
 
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      is_stop_on, is_bool_changed = get_values_from_stop_trackbar(movie, is_stop_on)
+      if is_bool_changed:
+        stop_time = tgt_frame / fps if is_stop_on else 0.0
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
 
       if help_exists:
@@ -1008,56 +1088,45 @@ class CapturingMovie:
           [
             "[capture]",
             "select start,stop,step",
-            "now: {0:.2f}s".format(frame_now / fps),
+            "s: save",
+            "q/esc: abort",
+            "now: {0:.2f}s".format(tgt_frame / fps),
             "start: {0:.2f}s".format(start_time),
             "stop: {0:.2f}s".format(stop_time),
             "step: {0:.2f}s".format(time_step),
           ],
         )
-        add_texts_lower_right(img, ["s: save", "q/esc: abort"])
 
       cv2.imshow(movie, img)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
 
+        print("'s' is pressed.")
+        print("start,stop,step ({0},{1},{2})".format(start_time, stop_time, time_step))
+
         if (not is_start_on) or (not is_stop_on):
           print("start or stop is not selected!")
           continue
-        if stop_time - start_time <= time_step:
-          print("difference between stop & start must be > step!")
-          continue
         if stop_time <= start_time:
           print("stop must be > start!")
+          continue
+        if stop_time - start_time <= time_step:
+          print("difference between stop & start must be > step!")
           continue
         if time_step < 0.001:
           print("step must be > 0!")
           continue
 
-        print(
-          "'s' is pressed. capture time ({0},{1},{2}) are saved".format(
-            start_time, stop_time, time_step
-          )
-        )
         cv2.destroyAllWindows()
         return (start_time, stop_time, time_step)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esc' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          return None
 
 
 class ConcatenatingMovie:
@@ -1078,16 +1147,16 @@ class ConcatenatingMovie:
         number (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__number = number
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_number(self) -> Optional[int]:
+  def __get_number(self) -> Optional[int]:
     return self.__number
 
   def execute(self):
@@ -1096,7 +1165,7 @@ class ConcatenatingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    movies = self.get_target_list()
+    movies = self.__get_target_list()
     size_list: List[Tuple[int, int]] = []
     frame_list: List[int] = []
     fps_list: List[float] = []
@@ -1112,41 +1181,42 @@ class ConcatenatingMovie:
       frame_list.append(frames)
       fps_list.append(fps)
 
-    if self.get_number() is not None:
-      number_x = self.get_number()
+    if self.__get_number() is not None:
+      number_x = self.__get_number()
     else:
-      number_x = self.select_number(movies, size_list, frame_list)
+      number_x = self.__select_number(movies, size_list, frame_list)
 
     if number_x is None:
       return None
 
     number_y = math.ceil(len(movies) / number_x)
     black_list = [numpy.zeros((s[1], s[0], 3), numpy.uint8) for s in size_list]
-    concat = self.get_concatenated_movie_frame(
+    concat = self.__get_concatenated_movie_frame(
       movies, frame_list, black_list, 0, number_x, number_y
     )
 
     size = (concat.shape[1], concat.shape[0])
     movie_first = movies[0]
     output_path_list = get_output_path([movie_first], "concatenated")
-    prepare_output_directory(output_path_list[0])
     output_name = (
       str(pathlib.Path(output_path_list[0] / pathlib.Path(movie_first).stem)) + ".mp4"
     )
     fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-    output = cv2.VideoWriter(output_name, fourcc, fps_list[0], size, self.is_colored())
+    output = cv2.VideoWriter(
+      output_name, fourcc, fps_list[0], size, self.__is_colored()
+    )
     print("concatenating movie '{0}'...".format(output_name))
 
     for frame in range(max(frame_list) + 1):
-      concat = self.get_concatenated_movie_frame(
+      concat = self.__get_concatenated_movie_frame(
         movies, frame_list, black_list, frame, number_x, number_y
       )
       output.write(
-        concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY)
+        concat if self.__is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY)
       )
     return [output_name]
 
-  def select_number(
+  def __select_number(
     self,
     movie_list: List[str],
     size_list: List[Tuple[int, int]],
@@ -1164,29 +1234,23 @@ class ConcatenatingMovie:
     """
     window = movie_list[0]
     movie_number = len(movie_list)
-    max_frame = max(frame_list)
+    frames = max(frame_list)
     black_list = [numpy.zeros((s[1], s[0], 3), numpy.uint8) for s in size_list]
 
     cv2.namedWindow(window, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(window, 500, 700)
     help_exists = False
 
-    division = 100
-    tick = division if division < max_frame else max_frame
-    tick_s = (int)(max_frame / division) + 1
-    cv2.createTrackbar("frame\n", window, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", window, 0, tick_s, no)
+    create_frame_trackbars(window, frames)
     cv2.createTrackbar("x\n", window, 1, 5, no)
 
     print("--- concatenate ---")
     print("select number of pictures in x direction in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", window) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", window)
-      frame_now = frame + frame_s if frame + frame_s < max_frame else max_frame
+      tgt_frame = get_value_from_frame_trackbars(window, frames)
       number_x = cv2.getTrackbarPos("x\n", window)
 
       if number_x == 0:
@@ -1195,17 +1259,15 @@ class ConcatenatingMovie:
         number_x = movie_number
 
       number_y = math.ceil(movie_number / number_x)
-      concat = self.get_concatenated_movie_frame(
-        movie_list, frame_list, black_list, frame_now, number_x, number_y
+      concat = self.__get_concatenated_movie_frame(
+        movie_list, frame_list, black_list, tgt_frame, number_x, number_y
       )
 
       if help_exists:
         add_texts_upper_left(
-          concat, ["[concatenate]", "select x", "frame: {0}".format(frame_now)],
+          concat, ["[concatenate]", "select x", "frame: {0}".format(tgt_frame)],
         )
-        add_texts_lower_right(
-          concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-        )
+        add_texts_lower_right(concat, ["s:save", "h:on/off help", "q/esc:abort"])
 
       cv2.imshow(window, concat)
       k = cv2.waitKey(1) & 0xFF
@@ -1218,23 +1280,13 @@ class ConcatenatingMovie:
         return number_x
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
-
-  def get_concatenated_movie_frame(
+  def __get_concatenated_movie_frame(
     self,
     movie_list: List[str],
     frame_list: List[int],
@@ -1293,16 +1345,16 @@ class ConcatenatingPicture:
         numbers (Optional[int], optional): number of pictures concatenated in x direction. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__number = number
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_number(self) -> Optional[int]:
+  def __get_number(self) -> Optional[int]:
     return self.__number
 
   def execute(self):
@@ -1311,7 +1363,7 @@ class ConcatenatingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    pictures = self.get_target_list()
+    pictures = self.__get_target_list()
     size_list = []
 
     if 25 < len(pictures):
@@ -1322,8 +1374,8 @@ class ConcatenatingPicture:
       img = cv2.imread(picture)
       size_list.append((img.shape[1], img.shape[0]))
 
-    if self.get_number() is not None:
-      number_x = self.get_number()
+    if self.__get_number() is not None:
+      number_x = self.__get_number()
     else:
       number_x = select_number(pictures, size_list)
 
@@ -1331,14 +1383,13 @@ class ConcatenatingPicture:
       return None
 
     output_path_list = get_output_path([pictures[0]], "concatenated")
-    prepare_output_directory(output_path_list[0])
     name = str(pathlib.Path(output_path_list[0] / pathlib.Path(pictures[0]).name))
 
     print("concatenating picture '{0}'...".format(name))
     number_y = math.ceil(len(pictures) / number_x)
     concat = get_concatenated_pictures(pictures, number_x, number_y)
     cv2.imwrite(
-      name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
+      name, concat if self.__is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
     )
     return [name]
 
@@ -1361,16 +1412,16 @@ class ConcatenatingPictureDirectory:
         numbers (Optional[int], optional):  number of pictures concatenated in x direction. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__number = number
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_number(self) -> Optional[int]:
+  def __get_number(self) -> Optional[int]:
     return self.__number
 
   def execute(self):
@@ -1379,7 +1430,7 @@ class ConcatenatingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    directories = self.get_target_list()
+    directories = self.__get_target_list()
     output_path_list = get_output_path(directories, "concatenated")
     return_list: List[str] = []
 
@@ -1400,8 +1451,8 @@ class ConcatenatingPictureDirectory:
         img = cv2.imread(p)
         size_list.append((img.shape[1], img.shape[0]))
 
-      if self.get_number() is not None:
-        number_x = self.get_number()
+      if self.__get_number() is not None:
+        number_x = self.__get_number()
       else:
         number_x = select_number(p_list, size_list)
 
@@ -1409,14 +1460,14 @@ class ConcatenatingPictureDirectory:
         continue
 
       print("concatenating pictures in '{0}'...".format(directory))
-      prepare_output_directory(output_path_list[0])
       number_y = math.ceil(len(p_list) / number_x)
       concat = get_concatenated_pictures(p_list, number_x, number_y)
       file_name = directory_path.name + pathlib.Path(p_list[0]).suffix
       name = str(pathlib.Path(output_path_list[idx] / file_name))
       return_list.append(name)
       cv2.imwrite(
-        name, concat if self.is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
+        name,
+        concat if self.__is_colored() else cv2.cvtColor(concat, cv2.COLOR_BGR2GRAY),
       )
 
     return return_list if return_list else None
@@ -1442,7 +1493,7 @@ def select_number(
 
   print("--- concatenate ---")
   print("select number of pictures in x direction in GUI window!")
-  print("(s: save if selected, h:on/off help, q/esc: abort)")
+  print("(s: save, h:on/off help, q/esc: abort)")
 
   while True:
 
@@ -1458,9 +1509,7 @@ def select_number(
       add_texts_upper_left(
         concat, ["[concatenate]", "select x"],
       )
-      add_texts_lower_right(
-        concat, ["s:save if selected", "h:on/off help", "q/esc:abort"]
-      )
+      add_texts_lower_right(concat, ["s:save", "h:on/off help", "q/esc:abort"])
     cv2.imshow(window, concat)
     k = cv2.waitKey(1) & 0xFF
 
@@ -1472,21 +1521,11 @@ def select_number(
       return number_x
 
     elif k == ord("h"):
-      if help_exists:
-        help_exists = False
-      else:
-        help_exists = True
-      continue
+      help_exists = False if help_exists else True
 
-    elif k == ord("q"):
-      cv2.destroyAllWindows()
-      print("'q' is pressed. abort")
-      return None
-
-    elif k == 27:
-      cv2.destroyAllWindows()
-      print("'Esq' is pressed. abort")
-      return None
+    else:
+      if press_q_or_Esc(k):
+        None
 
 
 def get_concatenated_pictures(
@@ -1574,16 +1613,16 @@ class CroppingMovie:
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__positions = positions
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+  def __get_positions(self) -> Optional[Tuple[int, int, int, int]]:
     return self.__positions
 
   def execute(self):
@@ -1592,32 +1631,31 @@ class CroppingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    if self.get_positions() is not None:
-      positions = self.get_positions()
+    if self.__get_positions() is not None:
+      positions = self.__get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be > 1st")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "cropped")
+    output_path_list = get_output_path(self.__get_target_list(), "cropped")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
-      if self.get_positions() is None:
-        positions = self.select_positions(output_name, W, H, frames, fps, cap)
+      if self.__get_positions() is None:
+        positions = self.__select_positions(output_name, W, H, frames, fps, cap)
         if positions is None:
           continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(positions[2] - positions[0]), int(positions[3] - positions[1]))
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-      output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, size, self.__is_colored())
       print("cropping movie '{0}'...".format(movie))
 
       while True:
@@ -1626,12 +1664,12 @@ class CroppingMovie:
           break
         cropped = frame[positions[1] : positions[3], positions[0] : positions[2]]
         output.write(
-          cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
+          cropped if self.__is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY)
         )
 
     return return_list if return_list else None
 
-  def select_positions(
+  def __select_positions(
     self, movie: str, W: int, H: int, frames: int, fps: float, cap: cv2.VideoCapture,
   ) -> Optional[Tuple[int, int, int, int]]:
     """select(get) two positions for capring process using GUI window
@@ -1640,7 +1678,7 @@ class CroppingMovie:
         movie (str): movie file name
         W (int): W video length
         H (int): H video length
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -1651,11 +1689,7 @@ class CroppingMovie:
     cv2.resizeWindow(movie, 500, 700)
     help_exists = False
 
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
+    create_frame_trackbars(movie, frames)
 
     points: List[Tuple[int, int]] = []
     cv2.setMouseCallback(movie, mouse_on_select_positions, points)
@@ -1663,14 +1697,12 @@ class CroppingMovie:
 
     print("--- crop ---")
     print("select two positions in GUI window! (2nd must be > 1st)")
-    print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
+    print("(s: save, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
 
       if len(points) == 1:
@@ -1689,18 +1721,11 @@ class CroppingMovie:
 
       if help_exists:
         add_texts_lower_right(
-          img,
-          [
-            "s:save if selected",
-            "h:on/off help",
-            "c:clear",
-            "click:select",
-            "q/esc:abort",
-          ],
+          img, ["s:save", "h:on/off help", "c:clear", "click:select", "q/esc:abort"],
         )
         add_texts_upper_left(
           img,
-          ["[crop]", "select two positions", "now: {0:.2f}s".format(frame_now / fps)],
+          ["[crop]", "select two positions", "now: {0:.2f}s".format(tgt_frame / fps)],
         )
 
         if len(points) == 1:
@@ -1736,21 +1761,11 @@ class CroppingMovie:
         continue
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class CroppingPicture:
@@ -1771,16 +1786,16 @@ class CroppingPicture:
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__positions = positions
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+  def __get_positions(self) -> Optional[Tuple[int, int, int, int]]:
     return self.__positions
 
   def execute(self):
@@ -1789,36 +1804,35 @@ class CroppingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_positions() is not None:
-      positions = self.get_positions()
+    if self.__get_positions() is not None:
+      positions = self.__get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be larger than 1st")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "cropped")
+    output_path_list = get_output_path(self.__get_target_list(), "cropped")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_target_list(), output_path_list):
+    for picture, output_path in zip(self.__get_target_list(), output_path_list):
 
       name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
-      if self.get_positions() is None:
-        positions = self.select_positions(name, img)
+      if self.__get_positions() is None:
+        positions = self.__select_positions(name, img)
         if positions is None:
           continue
 
       print("cropping picture '{0}'...".format(picture))
-      prepare_output_directory(output_path)
       cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
       return_list.append(name)
       cv2.imwrite(
         name,
-        cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
+        cropped if self.__is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
       )
 
     return return_list if return_list else None
 
-  def select_positions(
+  def __select_positions(
     self, picture: str, img: numpy.array
   ) -> Optional[Tuple[int, int, int, int]]:
     """select(get) two positions for capring process using GUI window
@@ -1840,7 +1854,7 @@ class CroppingPicture:
 
     print("--- crop ---")
     print("select two positions in GUI window! (2nd must be > 1st)")
-    print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
+    print("(s: save, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
 
@@ -1863,13 +1877,7 @@ class CroppingPicture:
       if help_exists:
         add_texts_lower_right(
           img_show,
-          [
-            "s:save if selected",
-            "h:on/off help",
-            "c:clear",
-            "click:select",
-            "q/esc:abort",
-          ],
+          ["s:save", "h:on/off help", "c:clear", "click:select", "q/esc:abort"],
         )
         add_texts_upper_left(
           img_show, ["[crop]", "select two positions"],
@@ -1908,21 +1916,11 @@ class CroppingPicture:
         continue
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class CroppingPictureDirectory:
@@ -1943,16 +1941,16 @@ class CroppingPictureDirectory:
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop movie. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__positions = positions
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+  def __get_positions(self) -> Optional[Tuple[int, int, int, int]]:
     return self.__positions
 
   def execute(self):
@@ -1961,16 +1959,16 @@ class CroppingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_positions() is not None:
-      positions = self.get_positions()
+    if self.__get_positions() is not None:
+      positions = self.__get_positions()
       if positions[2] <= positions[0] or positions[3] <= positions[1]:
         print("2nd position must be larger than 1st")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "cropped")
+    output_path_list = get_output_path(self.__get_target_list(), "cropped")
     return_list: List[str] = []
 
-    for directory, output_path in zip(self.get_target_list(), output_path_list):
+    for directory, output_path in zip(self.__get_target_list(), output_path_list):
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
@@ -1978,13 +1976,12 @@ class CroppingPictureDirectory:
         print("no file exists in '{0}'!".format(directory))
         continue
 
-      if self.get_positions() is None:
-        positions = self.select_positions(str(output_path), p_list)
+      if self.__get_positions() is None:
+        positions = self.__select_positions(str(output_path), p_list)
         if positions is None:
           continue
 
       return_list.append(str(output_path))
-      prepare_output_directory(output_path)
       print("cropping picture in '{0}'...".format(directory))
 
       for p in p_list:
@@ -1992,12 +1989,12 @@ class CroppingPictureDirectory:
         cropped = img[positions[1] : positions[3], positions[0] : positions[2]]
         cv2.imwrite(
           str(pathlib.Path(output_path / pathlib.Path(p).name)),
-          cropped if self.is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
+          cropped if self.__is_colored() else cv2.cvtColor(cropped, cv2.COLOR_BGR2GRAY),
         )
 
     return return_list if return_list else None
 
-  def select_positions(
+  def __select_positions(
     self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[int, int, int, int]]:
     """select(get) two positions for capring process using GUI window
@@ -2014,11 +2011,7 @@ class CroppingPictureDirectory:
     help_exists = False
 
     frames = len(picture_list) - 1
-    division = 50
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", directory, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", directory, 0, tick_s, no)
+    create_frame_trackbars(directory, frames)
 
     points: List[Tuple[int, int]] = []
     cv2.setMouseCallback(directory, mouse_on_select_positions, points)
@@ -2026,14 +2019,12 @@ class CroppingPictureDirectory:
 
     print("--- crop ---")
     print("select two positions in GUI window! (2nd must be > 1st)")
-    print("(s: save if selected, h:on/off help, c: clear, click: select, q/esc: abort)")
+    print("(s: save, h:on/off help, c: clear, click: select, q/esc: abort)")
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", directory)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(picture_list[frame_now])
+      tgt_frame = get_value_from_frame_trackbars(directory, frames)
+      img = cv2.imread(picture_list[tgt_frame])
       W, H = img.shape[1], img.shape[0]
 
       if len(points) == 1:
@@ -2052,17 +2043,10 @@ class CroppingPictureDirectory:
 
       if help_exists:
         add_texts_lower_right(
-          img,
-          [
-            "s:save if selected",
-            "h:on/off help",
-            "c:clear",
-            "click:select",
-            "q/esc:abort",
-          ],
+          img, ["s:save", "h:on/off help", "c:clear", "click:select", "q/esc:abort"],
         )
         add_texts_upper_left(
-          img, ["[crop]", "select two positions", "frame: {0}".format(frame_now)],
+          img, ["[crop]", "select two positions", "frame: {0}".format(tgt_frame)],
         )
 
         if len(points) == 1:
@@ -2098,30 +2082,11 @@ class CroppingPictureDirectory:
         continue
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
-
-
-def mouse_on_select_positions(event, x, y, flags, params):
-  """call back function on mouse click
-  """
-  points = params
-
-  if event == cv2.EVENT_LBUTTONUP:
-    points.append([x, y])
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class CreatingLuminanceHistgramPicture:
@@ -2137,13 +2102,13 @@ class CreatingLuminanceHistgramPicture:
         is_colored (bool, optional): flag to output in color. Defaults to False.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
   def execute(self):
     """creating luminance histglam
@@ -2151,16 +2116,15 @@ class CreatingLuminanceHistgramPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    output_path_list = get_output_path(self.get_target_list(), "histgram_luminance")
+    output_path_list = get_output_path(self.__get_target_list(), "histgram_luminance")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_target_list(), output_path_list):
+    for picture, output_path in zip(self.__get_target_list(), output_path_list):
 
       print("creating luminance histgram of picture '{0}'...".format(picture))
-      prepare_output_directory(output_path)
       return_list.append(str(pathlib.Path(output_path / pathlib.Path(picture).name)))
 
-      if self.is_colored():
+      if self.__is_colored():
         create_color_figure(picture, output_path)
       else:
         create_gray_figure(picture, output_path)
@@ -2181,13 +2145,13 @@ class CreatingLuminanceHistgramPictureDirectory:
         is_colored (bool, optional): flag to output in color. Defaults to False.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
   def execute(self):
     """creating luminance histglam
@@ -2195,10 +2159,10 @@ class CreatingLuminanceHistgramPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    output_path_list = get_output_path(self.get_target_list(), "histgram_luminance")
+    output_path_list = get_output_path(self.__get_target_list(), "histgram_luminance")
     return_list: List[str] = []
 
-    for directory, output_path in zip(self.get_target_list(), output_path_list):
+    for directory, output_path in zip(self.__get_target_list(), output_path_list):
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
@@ -2208,10 +2172,10 @@ class CreatingLuminanceHistgramPictureDirectory:
 
       if p_list:
         return_list.append(str(output_path))
-        prepare_output_directory(output_path)
+
         print("creating luminance histgram of picture in '{0}'...".format(directory))
 
-        if self.is_colored():
+        if self.__is_colored():
           for p in p_list:
             create_color_figure(p, output_path)
         else:
@@ -2281,16 +2245,16 @@ class ResizingMovie:
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__scales = scales
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_scales(self) -> Optional[Tuple[float, float]]:
+  def __get_scales(self) -> Optional[Tuple[float, float]]:
     return self.__scales
 
   def execute(self):
@@ -2299,42 +2263,42 @@ class ResizingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    output_path_list = get_output_path(self.get_target_list(), "resized")
+    output_path_list = get_output_path(self.__get_target_list(), "resized")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
-      if self.get_scales() is not None:
-        scales = self.get_scales()
+      if self.__get_scales() is not None:
+        scales = self.__get_scales()
       else:
-        scales = self.select_scales(output_name, W, H, frames, fps, cap)
+        scales = self.__select_scales(output_name, W, H, frames, fps, cap)
+
       if scales is None:
         continue
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
       size = (int(W * scales[0]), int(H * scales[1]))
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-      output = cv2.VideoWriter(output_name, fourcc, fps, size, self.is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, size, self.__is_colored())
       print("resizing movie '{0}'...".format(movie))
 
       while True:
+
         ret, frame = cap.read()
         if not ret:
           break
-        resized = cv2.resize(frame, dsize=size)
-        output.write(
-          resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY)
-        )
+        f1 = cv2.resize(frame, dsize=size)
+        f2 = f1 if self.__is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        output.write(f2)
 
     return return_list if return_list else None
 
-  def select_scales(
+  def __select_scales(
     self, movie: str, W: int, H: int, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[Tuple[float, float]]:
     """select(get) rotation degree using GUI window
@@ -2343,7 +2307,7 @@ class ResizingMovie:
         movie (str): movie file name
         W (int): W length of movie
         H (int): H length of movie
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -2354,38 +2318,20 @@ class ResizingMovie:
     cv2.resizeWindow(movie, 500, 700)
     help_exists = False
 
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
+    print("--- resize ---\nselect scales (x, y) in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    cv2.createTrackbar("scale x\n*0.1", movie, 10, 10, no)
-    cv2.createTrackbar("scale x\n*1.0", movie, 1, 10, no)
-    cv2.createTrackbar("scale y\n*0.1", movie, 10, 10, no)
-    cv2.createTrackbar("scale y\n*1.0", movie, 1, 10, no)
-
-    print("--- resize ---")
-    print("select scales (x, y) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_frame_trackbars(movie, frames)
+    create_scale_trackbars(movie)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
+      s_x, s_y = get_values_from_scale_trackbars(movie)
 
-      s_x_01 = cv2.getTrackbarPos("scale x\n*0.1", movie)
-      s_x_10 = cv2.getTrackbarPos("scale x\n*1.0", movie)
-      s_y_01 = cv2.getTrackbarPos("scale y\n*0.1", movie)
-      s_y_10 = cv2.getTrackbarPos("scale y\n*1.0", movie)
-      s_x = (1 if s_x_01 == 0 else s_x_01) * 0.1 * (1 if s_x_10 == 0 else s_x_10)
-      s_y = (1 if s_y_01 == 0 else s_y_01) * 0.1 * (1 if s_y_10 == 0 else s_y_10)
-      size = (int(W * s_x), int(H * s_y))
-
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
-      resized = cv2.resize(img, dsize=size)
+      resized = cv2.resize(img, dsize=(int(W * s_x), int(H * s_y)))
 
       if help_exists:
         add_texts_upper_left(
@@ -2393,38 +2339,28 @@ class ResizingMovie:
           [
             "[resize]",
             "select scales",
-            "now: {0:.2f}s".format(frame_now / fps),
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "now: {0:.2f}s".format(tgt_frame / fps),
             "scale: {0:.1f},{1:.1f}".format(s_x, s_y),
           ],
-        )
-        add_texts_lower_right(
-          resized, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
 
       cv2.imshow(movie, resized)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. scales is saved ({0:.1f},{1:.1f})".format(s_x, s_y))
+        print("'s' is pressed. scales are saved ({0:.1f},{1:.1f})".format(s_x, s_y))
         cv2.destroyAllWindows()
         return (s_x, s_y)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class ResizingPicture:
@@ -2445,16 +2381,16 @@ class ResizingPicture:
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__scales = scales
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_scales(self) -> Optional[Tuple[float, float]]:
+  def __get_scales(self) -> Optional[Tuple[float, float]]:
     return self.__scales
 
   def execute(self):
@@ -2463,34 +2399,32 @@ class ResizingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    output_path_list = get_output_path(self.get_target_list(), "resized")
+    output_path_list = get_output_path(self.__get_target_list(), "resized")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_target_list(), output_path_list):
+    for picture, output_path in zip(self.__get_target_list(), output_path_list):
 
       name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
       W, H = img.shape[1], img.shape[0]
 
-      if self.get_scales() is not None:
-        scales = self.get_scales()
+      if self.__get_scales() is not None:
+        scales = self.__get_scales()
       else:
-        scales = self.select_scales(name, img, W, H)
+        scales = self.__select_scales(name, img, W, H)
+
       if scales is None:
         continue
 
       print("resizing picture '{0}'...".format(picture))
-      prepare_output_directory(output_path)
-      resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
       return_list.append(name)
-      cv2.imwrite(
-        name,
-        resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
-      )
+      f1 = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
+      f2 = f1 if self.__is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+      cv2.imwrite(name, f2)
 
     return return_list if return_list else None
 
-  def select_scales(
+  def __select_scales(
     self, picture: str, img: numpy.array, W: int, H: int
   ) -> Optional[Tuple[float, float]]:
     """select(get) resizing scales using GUI window
@@ -2508,59 +2442,43 @@ class ResizingPicture:
     cv2.resizeWindow(picture, 500, 700)
     help_exists = False
 
-    cv2.createTrackbar("scale x\n*0.1", picture, 10, 10, no)
-    cv2.createTrackbar("scale x\n*1.0", picture, 1, 10, no)
-    cv2.createTrackbar("scale y\n*0.1", picture, 10, 10, no)
-    cv2.createTrackbar("scale y\n*1.0", picture, 1, 10, no)
+    print("--- resize ---\nselect scales (x, y) in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    print("--- resize ---")
-    print("select scales (x, y) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_scale_trackbars(picture)
 
     while True:
 
-      s_x_01 = cv2.getTrackbarPos("scale x\n*0.1", picture)
-      s_x_10 = cv2.getTrackbarPos("scale x\n*1.0", picture)
-      s_y_01 = cv2.getTrackbarPos("scale y\n*0.1", picture)
-      s_y_10 = cv2.getTrackbarPos("scale y\n*1.0", picture)
-      s_x = (1 if s_x_01 == 0 else s_x_01) * 0.1 * (1 if s_x_10 == 0 else s_x_10)
-      s_y = (1 if s_y_01 == 0 else s_y_01) * 0.1 * (1 if s_y_10 == 0 else s_y_10)
-      size = (int(W * s_x), int(H * s_y))
-      resized = cv2.resize(img, dsize=size)
+      s_x, s_y = get_values_from_scale_trackbars(picture)
+      resized = cv2.resize(img, dsize=(int(W * s_x), int(H * s_y)))
 
       if help_exists:
         add_texts_upper_left(
           resized,
-          ["[resize]", "select scales", "scale: {0:.1f},{1:.1f}".format(s_x, s_y)],
-        )
-        add_texts_lower_right(
-          resized, ["s:save if selected", "h:on/off help", "q/esc:abort"]
+          [
+            "[resize]",
+            "select scales",
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "scale: {0:.1f},{1:.1f}".format(s_x, s_y),
+          ],
         )
 
       cv2.imshow(picture, resized)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. scales is saved ({0:.1f},{1:.1f})".format(s_x, s_y))
+        print("'s' is pressed. scales are saved ({0:.1f},{1:.1f})".format(s_x, s_y))
         cv2.destroyAllWindows()
         return (s_x, s_y)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class ResizingPictureDirectory:
@@ -2581,16 +2499,16 @@ class ResizingPictureDirectory:
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale movie. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__scales = scales
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_scales(self) -> Optional[Tuple[float, float]]:
+  def __get_scales(self) -> Optional[Tuple[float, float]]:
     return self.__scales
 
   def execute(self):
@@ -2599,40 +2517,41 @@ class ResizingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    output_path_list = get_output_path(self.get_target_list(), "resized")
+    output_path_list = get_output_path(self.__get_target_list(), "resized")
     return_list: List[str] = []
 
-    for directory, output_path in zip(self.get_target_list(), output_path_list):
+    for directory, output_path in zip(self.__get_target_list(), output_path_list):
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+
       if not p_list:
         print("no file exists in '{0}'!".format(directory))
         continue
 
-      if self.get_scales() is not None:
-        scales = self.get_scales()
+      if self.__get_scales() is not None:
+        scales = self.__get_scales()
       else:
-        scales = self.select_scales(str(output_path), p_list)
+        scales = self.__select_scales(str(output_path), p_list)
+
       if scales is None:
         continue
 
       return_list.append(str(output_path))
-      prepare_output_directory(output_path)
       print("resizing picture in '{0}'...".format(directory))
 
       for p in p_list:
+
         img = cv2.imread(p)
         W, H = img.shape[1], img.shape[0]
-        resized = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
-        cv2.imwrite(
-          str(pathlib.Path(output_path / pathlib.Path(p).name)),
-          resized if self.is_colored() else cv2.cvtColor(resized, cv2.COLOR_BGR2GRAY),
-        )
+        f1 = cv2.resize(img, dsize=(int(W * scales[0]), int(H * scales[1])))
+        f2 = f1 if self.__is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        pic_name = str(pathlib.Path(output_path / pathlib.Path(p).name))
+        cv2.imwrite(pic_name, f2)
 
     return return_list if return_list else None
 
-  def select_scales(
+  def __select_scales(
     self, directory: str, picture_list: List[str]
   ) -> Optional[Tuple[float, float]]:
     """select(get) resizing scales using GUI window
@@ -2647,39 +2566,21 @@ class ResizingPictureDirectory:
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
     help_exists = False
-
     frames = len(picture_list) - 1
-    division = 50
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", directory, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", directory, 0, tick_s, no)
 
-    cv2.createTrackbar("scale x\n*0.1", directory, 10, 10, no)
-    cv2.createTrackbar("scale x\n*1.0", directory, 1, 10, no)
-    cv2.createTrackbar("scale y\n*0.1", directory, 10, 10, no)
-    cv2.createTrackbar("scale y\n*1.0", directory, 1, 10, no)
+    print("--- resize ---\nselect scales (x, y) in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    print("--- resize ---")
-    print("select scales (x, y) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_frame_trackbars(directory, frames)
+    create_scale_trackbars(directory)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", directory)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(picture_list[frame_now])
+      tgt_frame = get_value_from_frame_trackbars(directory, frames)
+      s_x, s_y = get_values_from_scale_trackbars(directory)
+      img = cv2.imread(picture_list[tgt_frame])
       W, H = img.shape[1], img.shape[0]
-
-      s_x_01 = cv2.getTrackbarPos("scale x\n*0.1", directory)
-      s_x_10 = cv2.getTrackbarPos("scale x\n*1.0", directory)
-      s_y_01 = cv2.getTrackbarPos("scale y\n*0.1", directory)
-      s_y_10 = cv2.getTrackbarPos("scale y\n*1.0", directory)
-      s_x = (1 if s_x_01 == 0 else s_x_01) * 0.1 * (1 if s_x_10 == 0 else s_x_10)
-      s_y = (1 if s_y_01 == 0 else s_y_01) * 0.1 * (1 if s_y_10 == 0 else s_y_10)
-      size = (int(W * s_x), int(H * s_y))
-      resized = cv2.resize(img, dsize=size)
+      resized = cv2.resize(img, dsize=(int(W * s_x), int(H * s_y)))
 
       if help_exists:
         add_texts_upper_left(
@@ -2687,38 +2588,28 @@ class ResizingPictureDirectory:
           [
             "[resize]",
             "select scales",
-            "frame: {0}".format(frame_now),
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "frame: {0}".format(tgt_frame),
             "scale: {0:.1f},{1:.1f}".format(s_x, s_y),
           ],
-        )
-        add_texts_lower_right(
-          resized, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
 
       cv2.imshow(directory, resized)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. scales is saved ({0:.1f},{1:.1f})".format(s_x, s_y))
+        print("'s' is pressed. scales are saved ({0:.1f},{1:.1f})".format(s_x, s_y))
         cv2.destroyAllWindows()
         return (s_x, s_y)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class RotatingMovie:
@@ -2740,16 +2631,16 @@ class RotatingMovie:
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__degree = degree
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_degree(self) -> Optional[float]:
+  def __get_degree(self) -> Optional[float]:
     return self.__degree
 
   def execute(self):
@@ -2758,65 +2649,52 @@ class RotatingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    if self.get_degree() is not None:
-      degree = self.get_degree()
-      rad = degree / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-
-    output_path_list = get_output_path(self.get_target_list(), "rotated")
+    output_path_list = get_output_path(self.__get_target_list(), "rotated")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
-      if self.get_degree() is None:
-        degree = self.select_degree(output_name, frames, fps, cap)
-        if degree is None:
-          continue
+      if self.__get_degree() is not None:
+        degree = self.__get_degree()
+      else:
+        degree = self.__select_degree(output_name, frames, fps, cap)
 
-        rad = degree / 180.0 * numpy.pi
-        sin_rad = numpy.absolute(numpy.sin(rad))
-        cos_rad = numpy.absolute(numpy.cos(rad))
+      if degree is None:
+        continue
+
+      size_rot = get_rotated_size(W, H, degree)
+      center_rot = (int(size_rot[0] / 2), int(size_rot[1] / 2))
+      affine = get_rotate_affine_matrix((int(W / 2), int(H / 2)), center_rot, degree)
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
-      center = (W / 2, H / 2)
-      W_rot = int(numpy.round(H * sin_rad + W * cos_rad))
-      H_rot = int(numpy.round(H * cos_rad + W * sin_rad))
-      size_rot = (W_rot, H_rot)
-      rotation_matrix = cv2.getRotationMatrix2D(center, degree, 1.0)
-      affine_matrix = rotation_matrix.copy()
-      affine_matrix[0][2] = affine_matrix[0][2] - W / 2 + W_rot / 2
-      affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
-
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-      output = cv2.VideoWriter(output_name, fourcc, fps, size_rot, self.is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, size_rot, self.__is_colored())
       print("rotating movie '{0}'...".format(movie))
 
       while True:
+
         ret, frame = cap.read()
         if not ret:
           break
-        rotated = cv2.warpAffine(frame, affine_matrix, size_rot, flags=cv2.INTER_CUBIC)
-        output.write(
-          rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
-        )
+        f1 = cv2.warpAffine(frame, affine, size_rot, flags=cv2.INTER_CUBIC)
+        f2 = f1 if self.__is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        output.write(f2)
 
     return return_list if return_list else None
 
-  def select_degree(
+  def __select_degree(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[float]:
     """select(get) rotation degree using GUI window
 
     Args:
         movie (str): movie file name
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -2827,37 +2705,20 @@ class RotatingMovie:
     cv2.resizeWindow(movie, 500, 700)
     help_exists = False
 
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
+    print("--- rotate ---\nselect rotation degree in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    rotation_tick = 4
-    rotation_tick_s = 90
-    cv2.createTrackbar("degree\n", movie, 0, rotation_tick, no)
-    cv2.createTrackbar("degree s\n", movie, 0, rotation_tick_s, no)
-
-    print("--- rotate ---")
-    print("select rotation degree in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_frame_trackbars(movie, frames)
+    create_degree_trackbars(movie)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
+      degree = get_value_from_degree_trackbars(movie)
 
-      degree = cv2.getTrackbarPos("degree\n", movie) * rotation_tick_s
-      degree_s = cv2.getTrackbarPos("degree s\n", movie)
-      degree_total = degree + degree_s
-      rad = degree_total / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
-      rotated = get_rotated_image(img, degree_total, sin_rad, cos_rad)
+      rotated = get_rotated_frame(img, degree)
 
       if help_exists:
         add_texts_upper_left(
@@ -2865,38 +2726,28 @@ class RotatingMovie:
           [
             "[rotate]",
             "select degree",
-            "now: {0:.2f}s".format(frame_now / fps),
-            "deg: {0}".format(degree_total),
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "now: {0:.2f}s".format(tgt_frame / fps),
+            "deg: {0}".format(degree),
           ],
-        )
-        add_texts_lower_right(
-          rotated, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
 
       cv2.imshow(movie, rotated)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. degree is saved ({0})".format(degree_total))
+        print("'s' is pressed. degree is saved ({0})".format(degree))
         cv2.destroyAllWindows()
-        return float(degree_total)
+        return float(degree)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class RotatingPicture:
@@ -2917,16 +2768,16 @@ class RotatingPicture:
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__degree = degree
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_degree(self) -> Optional[float]:
+  def __get_degree(self) -> Optional[float]:
     return self.__degree
 
   def execute(self):
@@ -2935,41 +2786,31 @@ class RotatingPicture:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_degree() is not None:
-      degree = self.get_degree()
-      rad = degree / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-
-    output_path_list = get_output_path(self.get_target_list(), "rotated")
+    output_path_list = get_output_path(self.__get_target_list(), "rotated")
     return_list: List[str] = []
 
-    for picture, output_path in zip(self.get_target_list(), output_path_list):
+    for picture, output_path in zip(self.__get_target_list(), output_path_list):
 
       name = str(pathlib.Path(output_path / pathlib.Path(picture).name))
       img = cv2.imread(picture)
 
-      if self.get_degree() is None:
-        degree = self.select_degree(name, img)
-        if degree is None:
-          continue
+      if self.__get_degree() is not None:
+        degree = self.__get_degree()
+      else:
+        degree = self.__select_degree(name, img)
 
-        rad = degree / 180.0 * numpy.pi
-        sin_rad = numpy.absolute(numpy.sin(rad))
-        cos_rad = numpy.absolute(numpy.cos(rad))
+      if degree is None:
+        continue
 
       print("rotating picture '{0}'...".format(picture))
-      prepare_output_directory(output_path)
-      rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
       return_list.append(name)
-      cv2.imwrite(
-        name,
-        rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
-      )
+      rotated = get_rotated_frame(img, degree)
+      f = rotated if self.__is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY)
+      cv2.imwrite(name, f)
 
     return return_list if return_list else None
 
-  def select_degree(self, picture: str, img: numpy.array) -> Optional[float]:
+  def __select_degree(self, picture: str, img: numpy.array) -> Optional[float]:
     """select(get) rotation degree using GUI window
 
     Args:
@@ -2983,57 +2824,43 @@ class RotatingPicture:
     cv2.resizeWindow(picture, 500, 700)
     help_exists = False
 
-    rotation_tick = 4
-    rotation_tick_s = 90
-    cv2.createTrackbar("degree\n", picture, 0, rotation_tick, no)
-    cv2.createTrackbar("degree s\n", picture, 0, rotation_tick_s, no)
+    print("--- rotate ---\nselect rotation degree in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    print("--- rotate ---")
-    print("select rotation degree in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_degree_trackbars(picture)
 
     while True:
 
-      degree = cv2.getTrackbarPos("degree\n", picture) * rotation_tick_s
-      degree_s = cv2.getTrackbarPos("degree s\n", picture)
-      degree_total = degree + degree_s
-      rad = degree_total / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-      rotated = get_rotated_image(img, degree_total, sin_rad, cos_rad)
+      degree = get_value_from_degree_trackbars(picture)
+      rotated = get_rotated_frame(img, degree)
 
       if help_exists:
         add_texts_upper_left(
-          rotated, ["[rotate]", "select degree", "deg: {0}".format(degree_total)],
-        )
-        add_texts_lower_right(
-          rotated, ["s:save if selected", "h:on/off help", "q/esc:abort"]
+          rotated,
+          [
+            "[rotate]",
+            "select degree",
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "deg: {0}".format(degree),
+          ],
         )
 
       cv2.imshow(picture, rotated)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. degree is saved ({0})".format(degree_total))
+        print("'s' is pressed. degree is saved ({0})".format(degree))
         cv2.destroyAllWindows()
-        return float(degree_total)
+        return float(degree)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class RotatingPictureDirectory:
@@ -3054,16 +2881,16 @@ class RotatingPictureDirectory:
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__degree = degree
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_degree(self) -> Optional[float]:
+  def __get_degree(self) -> Optional[float]:
     return self.__degree
 
   def execute(self):
@@ -3072,47 +2899,40 @@ class RotatingPictureDirectory:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output path names
     """
-    if self.get_degree() is not None:
-      degree = self.get_degree()
-      rad = degree / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-
-    output_path_list = get_output_path(self.get_target_list(), "rotated")
+    output_path_list = get_output_path(self.__get_target_list(), "rotated")
     return_list: List[str] = []
 
-    for directory, output_path in zip(self.get_target_list(), output_path_list):
+    for directory, output_path in zip(self.__get_target_list(), output_path_list):
 
       directory_path = pathlib.Path(directory)
       p_list = [str(p) for p in list(directory_path.iterdir())]
+
       if not p_list:
         print("no file exists in '{0}'!".format(directory))
         continue
 
-      if self.get_degree() is None:
-        degree = self.select_degree(str(output_path), p_list)
-        if degree is None:
-          continue
+      if self.__get_degree() is not None:
+        degree = self.__get_degree()
+      else:
+        degree = self.__select_degree(str(output_path), p_list)
 
-        rad = degree / 180.0 * numpy.pi
-        sin_rad = numpy.absolute(numpy.sin(rad))
-        cos_rad = numpy.absolute(numpy.cos(rad))
+      if degree is None:
+        continue
 
       return_list.append(str(output_path))
-      prepare_output_directory(output_path)
       print("rotating picture in '{0}'...".format(directory))
 
       for p in p_list:
+
         img = cv2.imread(p)
-        rotated = get_rotated_image(img, degree, sin_rad, cos_rad)
-        cv2.imwrite(
-          str(pathlib.Path(output_path / pathlib.Path(p).name)),
-          rotated if self.is_colored() else cv2.cvtColor(rotated, cv2.COLOR_BGR2GRAY),
-        )
+        f1 = get_rotated_frame(img, degree)
+        f2 = f1 if self.__is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        pic_name = str(pathlib.Path(output_path / pathlib.Path(p).name))
+        cv2.imwrite(pic_name, f2)
 
     return return_list if return_list else None
 
-  def select_degree(self, directory: str, picture_list: List[str]) -> Optional[float]:
+  def __select_degree(self, directory: str, picture_list: List[str]) -> Optional[float]:
     """select(get) rotation degree using GUI window
 
     Args:
@@ -3125,37 +2945,20 @@ class RotatingPictureDirectory:
     cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(directory, 500, 700)
     help_exists = False
-
     frames = len(picture_list) - 1
-    division = 50
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    cv2.createTrackbar("frame\n", directory, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", directory, 0, tick_s, no)
 
-    rotation_tick = 4
-    rotation_tick_s = 90
-    cv2.createTrackbar("degree\n", directory, 0, rotation_tick, no)
-    cv2.createTrackbar("degree s\n", directory, 0, rotation_tick_s, no)
+    print("--- rotate ---\nselect rotation degree in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
 
-    print("--- rotate ---")
-    print("select rotation degree in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    create_frame_trackbars(directory, frames)
+    create_degree_trackbars(directory)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", directory) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", directory)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
-      img = cv2.imread(picture_list[frame_now])
-
-      degree = cv2.getTrackbarPos("degree\n", directory) * rotation_tick_s
-      degree_s = cv2.getTrackbarPos("degree s\n", directory)
-      degree_total = degree + degree_s
-      rad = degree_total / 180.0 * numpy.pi
-      sin_rad = numpy.absolute(numpy.sin(rad))
-      cos_rad = numpy.absolute(numpy.cos(rad))
-      rotated = get_rotated_image(img, degree_total, sin_rad, cos_rad)
+      tgt_frame = get_value_from_frame_trackbars(directory, frames)
+      degree = get_value_from_degree_trackbars(directory)
+      img = cv2.imread(picture_list[tgt_frame])
+      rotated = get_rotated_frame(img, degree)
 
       if help_exists:
         add_texts_upper_left(
@@ -3163,64 +2966,28 @@ class RotatingPictureDirectory:
           [
             "[rotate]",
             "select degree",
-            "frame: {0}".format(frame_now),
-            "deg: {0}".format(degree_total),
+            "s:save",
+            "h:on/off help",
+            "q/esc:abort",
+            "frame: {0}".format(tgt_frame),
+            "deg: {0}".format(degree),
           ],
-        )
-        add_texts_lower_right(
-          rotated, ["s:save if selected", "h:on/off help", "q/esc:abort"]
         )
 
       cv2.imshow(directory, rotated)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
-        print("'s' is pressed. degree is saved ({0})".format(degree_total))
+        print("'s' is pressed. degree is saved ({0})".format(degree))
         cv2.destroyAllWindows()
-        return float(degree_total)
+        return float(degree)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esq' is pressed. abort")
-        return None
-
-
-def get_rotated_image(
-  img: numpy.array, degree: float, sin_rad: float, cos_rad: float
-) -> numpy.array:
-  """get rotated cv2 object
-
-  Args:
-      img (numpy.array): cv2 image object before rotation
-      degree (float): degree of rotation
-      sin_rad (float): sin of radian converted from degree
-      cos_rad (float): sin of radian converted from degree
-
-  Returns:
-      numpy.array: cv2 image object after rotation
-  """
-  W, H = img.shape[1], img.shape[0]
-  center = (W / 2, H / 2)
-  W_rot = int(numpy.round(H * sin_rad + W * cos_rad))
-  H_rot = int(numpy.round(H * cos_rad + W * sin_rad))
-  size_rot = (W_rot, H_rot)
-  rotation_matrix = cv2.getRotationMatrix2D(center, degree, 1.0)
-  affine_matrix = rotation_matrix.copy()
-  affine_matrix[0][2] = affine_matrix[0][2] - W / 2 + W_rot / 2
-  affine_matrix[1][2] = affine_matrix[1][2] - H / 2 + H_rot / 2
-  return cv2.warpAffine(img, affine_matrix, size_rot, flags=cv2.INTER_CUBIC)
+      else:
+        if press_q_or_Esc(k):
+          None
 
 
 class TrimmingMovie:
@@ -3241,16 +3008,16 @@ class TrimmingMovie:
         times (Tuple[float, float], optional): [start, stop] parameters for trimming movie (s). If this variable is None, this will be selected using GUI window Defaults to None.
     """
     self.__target_list = target_list
-    self.__is_colored = is_colored
+    self.__colored = is_colored
     self.__times = times
 
-  def get_target_list(self) -> Optional[List[str]]:
+  def __get_target_list(self) -> Optional[List[str]]:
     return self.__target_list
 
-  def is_colored(self) -> bool:
-    return self.__is_colored
+  def __is_colored(self) -> bool:
+    return self.__colored
 
-  def get_times(self) -> Optional[Tuple[float, float]]:
+  def __get_times(self) -> Optional[Tuple[float, float]]:
     return self.__times
 
   def execute(self):
@@ -3259,65 +3026,58 @@ class TrimmingMovie:
     Returns:
         Optional[List[str]]: if process is not executed, None is returned. list of output (movie) path names
     """
-    if self.get_times() is not None:
-      time = self.get_times()
-
+    if self.__get_times() is not None:
+      time = self.__get_times()
       if time[1] <= time[0]:
         print("stop must be > start")
         return None
 
-    output_path_list = get_output_path(self.get_target_list(), "trimmed")
+    output_path_list = get_output_path(self.__get_target_list(), "trimmed")
     return_list: List[str] = []
 
-    for movie, output_path in zip(self.get_target_list(), output_path_list):
+    for movie, output_path in zip(self.__get_target_list(), output_path_list):
 
       output_name = str(pathlib.Path(output_path / pathlib.Path(movie).stem)) + ".mp4"
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = get_movie_info(cap)
 
-      if self.get_times() is None:
-        time = self.select_times(str(output_path), frames, fps, cap)
-        if time is None:
-          continue
+      if self.__get_times() is None:
+        time = self.__select_times(str(output_path), frames, fps, cap)
 
-      frame_now = round(time[0] * fps)
-      frame_end = round(time[1] * fps)
-      if frames < frame_now or frames < frame_end:
-        print(
-          "start & stop frames ({0},{1}) must be < max frame ({2})".format(
-            frame_now, frame_end, frames
-          )
-        )
+      if time is None:
         continue
 
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      f1, f2 = round(time[0] * fps), round(time[1] * fps)
+
+      if frames < f1 or frames < f2:
+        print("start & stop ({0},{1}) must be < max frame ({2})".format(f1, f2, frames))
+        continue
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, f1)
       return_list.append(output_name)
-      prepare_output_directory(output_path)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
-      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self.__is_colored())
       print("trimming movie '{0}'...".format(movie))
 
-      while frame_now <= frame_end:
+      while f1 <= f2:
 
         ret, frame = cap.read()
-        frame_now = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
         if not ret:
           break
-
-        output.write(
-          frame if self.is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
-        )
+        f1 = int(cap.get(cv2.CAP_PROP_POS_FRAMES))
+        f = frame if self.__is_colored() else cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        output.write(f)
 
     return return_list if return_list else None
 
-  def select_times(
+  def __select_times(
     self, movie: str, frames: int, fps: float, cap: cv2.VideoCapture
   ) -> Optional[Tuple[float, float]]:
     """select(get) parametes for trimming using GUI window
 
     Args:
         movie (str): movie file name
-        frames (int): total frame of movie
+        frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
 
@@ -3326,42 +3086,29 @@ class TrimmingMovie:
     """
     cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
     cv2.resizeWindow(movie, 500, 700)
-    help_exists = False
-
-    division = 100
-    tick = division if division < frames else frames
-    tick_s = (int)(frames / division) + 1
-    is_start_on, is_stop_on = False, False
+    help_exists, is_start_on, is_stop_on = False, False, False
     start_time, stop_time = 0.0, 0.0
 
-    cv2.createTrackbar("frame\n", movie, 0, tick - 1, no)
-    cv2.createTrackbar("frame s\n", movie, 0, tick_s, no)
-    cv2.createTrackbar("start cap\n", movie, 0, 1, no)
-    cv2.createTrackbar("stop cap\n", movie, 0, 1, no)
-    print("--- trim ---")
-    print("select time (start, stop) in GUI window!")
-    print("(s: save if selected, h:on/off help, q/esc: abort)")
+    print("--- trim ---\nselect time (start, stop) in GUI window!")
+    print("(s: save, h:on/off help, q/esc: abort)")
+
+    create_frame_trackbars(movie, frames)
+    create_start_bool_trackbar(movie)
+    create_stop_bool_trackbar(movie)
 
     while True:
 
-      frame = cv2.getTrackbarPos("frame\n", movie) * tick_s
-      frame_s = cv2.getTrackbarPos("frame s\n", movie)
-      frame_now = frame + frame_s if frame + frame_s < frames else frames
+      tgt_frame = get_value_from_frame_trackbars(movie, frames)
 
-      if not is_start_on:
-        if cv2.getTrackbarPos("start cap\n", movie):
-          is_start_on, start_time = True, frame_now / fps
-      else:
-        if not cv2.getTrackbarPos("start cap\n", movie):
-          is_start_on, start_time = False, 0.0
-      if not is_stop_on:
-        if cv2.getTrackbarPos("stop cap\n", movie):
-          is_stop_on, stop_time = True, frame_now / fps
-      else:
-        if not cv2.getTrackbarPos("stop cap\n", movie):
-          is_stop_on, stop_time = False, 0.0
+      is_start_on, is_bool_changed = get_values_from_start_trackbar(movie, is_start_on)
+      if is_bool_changed:
+        start_time = tgt_frame / fps if is_start_on else 0.0
 
-      cap.set(cv2.CAP_PROP_POS_FRAMES, frame_now)
+      is_stop_on, is_bool_changed = get_values_from_stop_trackbar(movie, is_stop_on)
+      if is_bool_changed:
+        stop_time = tgt_frame / fps if is_stop_on else 0.0
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
 
       if help_exists:
@@ -3370,41 +3117,35 @@ class TrimmingMovie:
           [
             "[trim]",
             "select start,stop",
-            "now: {0:.2f}s".format(frame_now / fps),
+            "s: save",
+            "q/esc: abort",
+            "now: {0:.2f}s".format(tgt_frame / fps),
             "start: {0:.2f}s".format(start_time),
             "stop: {0:.2f}s".format(stop_time),
           ],
         )
-        add_texts_lower_right(img, ["s: save", "q/esc: abort"])
 
       cv2.imshow(movie, img)
       k = cv2.waitKey(1) & 0xFF
 
       if k == ord("s"):
+
+        print("'s' is pressed.")
+        print("start,stop ({0},{1})".format(start_time, stop_time))
+
         if (not is_start_on) or (not is_stop_on):
-          print("start & stop are not selected!")
+          print("start or stop is not selected!")
           continue
         if stop_time <= start_time:
-          print("stop must be > start")
+          print("stop must be > start!")
           continue
 
-        print("'s' is pressed. trim parameters are saved")
         cv2.destroyAllWindows()
         return (start_time, stop_time)
 
       elif k == ord("h"):
-        if help_exists:
-          help_exists = False
-        else:
-          help_exists = True
-        continue
+        help_exists = False if help_exists else True
 
-      elif k == ord("q"):
-        cv2.destroyAllWindows()
-        print("'q' is pressed. abort")
-        return None
-
-      elif k == 27:
-        cv2.destroyAllWindows()
-        print("'Esc' is pressed. abort")
-        return None
+      else:
+        if press_q_or_Esc(k):
+          None

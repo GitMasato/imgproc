@@ -28,8 +28,11 @@ def call_check_arg(
       parser (argparse.ArgumentParser): argparse.ArgumentParser object
   """
   items = [
-    value for key, value in args.__dict__.items() if key != "call" and key != "color"
+    value
+    for key, value in args.__dict__.items()
+    if (key != "call") and (key != "color")
   ]
+
   if not [item for item in items if item is not None]:
     sys.exit(parser.parse_args([arg_name, "--help"]))
 
@@ -43,6 +46,7 @@ def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("animate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
 
@@ -62,6 +66,7 @@ def call_binarize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("binarize", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -82,6 +87,7 @@ def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("capture", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list:
     sys.exit("no movie is given!")
 
@@ -96,6 +102,7 @@ def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("concatenate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -120,6 +127,7 @@ def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("crop", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -144,6 +152,7 @@ def call_hist_luminance(args: argparse.Namespace, parser: argparse.ArgumentParse
   """
   call_check_arg("hist-luminance", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
 
@@ -163,6 +172,7 @@ def call_resize(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("resize", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -187,6 +197,7 @@ def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("rotate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -211,6 +222,7 @@ def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """
   call_check_arg("trim", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
+
   if not m_list:
     sys.exit("no movie is given!")
 
@@ -256,7 +268,7 @@ def cli_execution():
     "animate",
     formatter_class=argparse.RawTextHelpFormatter,
     help="to crate movie (mp4) from pictures\n" + "(see sub-option 'animate -h')\n",
-    description="sub-command 'animate': to crate movie (mp4) from pictures",
+    description="sub-command 'animate': to create movie (mp4) from pictures",
   )
   add_argument_target(parser_animate)
   add_argument_color(parser_animate)

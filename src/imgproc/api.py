@@ -22,16 +22,17 @@ def animate(
   Args:
       target_list (List[str]): list of pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      fps (float, optional): fps of created movie. Defaults to None. if this is not
-      given, you will select this in GUI window
+      fps (Optional[float], optional): fps of created movie. Defaults to None. if this is not given, you will select this in GUI window
 
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
 
@@ -53,21 +54,23 @@ def animate(
 
 
 def binarize(
-  target_list: List[str], *, thresholds: Tuple[int, int] = None,
+  target_list: List[str], *, thresholds: Optional[Tuple[int, int]] = None,
 ):
   """api to binarize movie/picture (note: keyword-only argument)
 
   Args:
       target_list (List[str]): list of movies, pictures or directories where pictures are stored.
-      thresholds (Tuple[int, int], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. If this variable is None, this will be selected using GUI window. Defaults to None.
+      thresholds (Optional[Tuple[int, int]], optional): [low, high] threshold values to be used to binarize movie/picture. Low threshold must be smaller than high one. If this variable is None, this will be selected using GUI window. Defaults to None.
 
    Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -95,22 +98,24 @@ def capture(
   target_list: List[str],
   *,
   is_colored: bool = False,
-  times: Tuple[float, float, float] = None,
+  times: Optional[Tuple[float, float, float]] = None,
 ):
   """api to capture movies (note: keyword-only argument)
 
   Args:
       target_list (List[str]): list of movie-file paths.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). Start must be smaller than stop, and difference between start and stop must be larger than step. Defaults to None. If this variable is None, this will be selected using GUI window
+      times (Optional[Tuple[float, float, float]], optional): [start, stop, step] parameters for capturing movie (s). Start must be smaller than stop, and difference between start and stop must be larger than step. Defaults to None. If this variable is None, this will be selected using GUI window
 
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list:
     sys.exit("no movie is given!")
 
@@ -137,10 +142,12 @@ def concatenate(
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -184,10 +191,12 @@ def crop(
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -225,10 +234,12 @@ def hist_luminance(target_list: List[str], *, is_colored: bool = False):
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not p_list and not d_list:
     sys.exit("no picture, directory is given!")
 
@@ -253,22 +264,24 @@ def resize(
   target_list: List[str],
   *,
   is_colored: bool = False,
-  scales: Tuple[float, float] = None,
+  scales: Optional[Tuple[float, float]] = None,
 ):
   """api to resize movie/picture (note: keyword-only argument)
 
   Args:
       target_list (List[str]): list of movies, pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      scales (Tuple[float, float], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to None. if this is not given, you will select this in GUI window
+      scales (Optional[Tuple[float, float]], optional): [x, y] ratios in each direction to scale movie/picture. Defaults to None. if this is not given, you will select this in GUI window
 
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -309,10 +322,12 @@ def rotate(
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list and not p_list and not d_list:
     sys.exit("no movie, picture, directory is given!")
 
@@ -344,22 +359,24 @@ def trim(
   target_list: List[str],
   *,
   is_colored: bool = False,
-  times: Tuple[float, float] = None,
+  times: Optional[Tuple[float, float]] = None,
 ):
   """api to trim movies (note: keyword-only argument)
 
   Args:
       target_list (List[str]): list of movie-file paths.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      times (Tuple[float, float], optional): [start, stop] parameters for trimming movie (s). Start must be smaller than stop. Defaults to None. If this variable is None, this will be selected using GUI window
+      times (Optional[Tuple[float, float]], optional): [start, stop] parameters for trimming movie (s). Start must be smaller than stop. Defaults to None. If this variable is None, this will be selected using GUI window
 
   Returns:
       return (List[str], optional): list of processed movies. if no process is executed, None is returned
   """
-  return_list: List[str] = []
   if not target_list:
     sys.exit("no target is given!")
+
   m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
   if not m_list:
     sys.exit("no movie is given!")
 
