@@ -4,8 +4,6 @@ Required arguments are list of movies or pictures. if no movie or picture is giv
 
 Output data (after image process) will be generated in 'cv2/target-noExtension/process-name/target' directory under current location (e.g. ./cv2/test/binarized/test.png). if movie/picture in 'cv2' directory is given as input (e.g. ./cv2/test/rotated/test.png), the output will be generated in same cv2 but 'selected process' directory (e.g. ./cv2/test/binarized/test.png)
 
-If directory path where pictures are stored is given as picture argument, same image-process will be applied to all pictures in the directory.
-
 Examples:
   imgproc animate --picture tmp_dir --fps 20.0 --color
 
@@ -20,7 +18,7 @@ from imgproc import process
 def call_check_arg(
   arg_name: str, args: argparse.Namespace, parser: argparse.ArgumentParser
 ):
-  """check if every cli-arguments is correct
+  """check if required cli-arguments are given
 
   Args:
       arg_name (str): subcommand name
@@ -30,7 +28,7 @@ def call_check_arg(
   items = [
     value
     for key, value in args.__dict__.items()
-    if (key != "call") and (key != "color")
+    if (key != "call") and (key != "color") and (key != "text")
   ]
 
   if not [item for item in items if item is not None]:
@@ -108,17 +106,17 @@ def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
   if m_list:
     process.ConcatenatingMovie(
-      target_list=m_list, is_colored=args.color, number=args.number
+      target_list=m_list, is_colored=args.color, number_x=args.number_x
     ).execute()
 
   if p_list:
     process.ConcatenatingPicture(
-      target_list=p_list, is_colored=args.color, number=args.number
+      target_list=p_list, is_colored=args.color, number_x=args.number_x
     ).execute()
 
   if d_list:
     process.ConcatenatingPictureDirectory(
-      target_list=d_list, is_colored=args.color, number=args.number
+      target_list=d_list, is_colored=args.color, number_x=args.number_x
     ).execute()
 
 
@@ -217,6 +215,44 @@ def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
     ).execute()
 
 
+def call_subtitle(args: argparse.Namespace, parser: argparse.ArgumentParser):
+  """call function when subtitle command is given
+  """
+  call_check_arg("subtitle", args, parser)
+  m_list, p_list, d_list = process.sort_target_type(args.target)
+
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.SubtitlingMovie(
+      target_list=m_list,
+      is_colored=args.color,
+      text=args.text,
+      position=args.position,
+      size=args.size,
+      time=args.time,
+    ).execute()
+
+  if p_list:
+    process.SubtitlingPicture(
+      target_list=p_list,
+      is_colored=args.color,
+      text=args.text,
+      position=args.position,
+      size=args.size,
+    ).execute()
+
+  if d_list:
+    process.SubtitlingPictureDirectory(
+      target_list=d_list,
+      is_colored=args.color,
+      text=args.text,
+      position=args.position,
+      size=args.size,
+    ).execute()
+
+
 def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
   """call function when trim command is given
   """
@@ -232,6 +268,36 @@ def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
     ).execute()
 
 
+def add_argument_target(parser: argparse.ArgumentParser):
+  parser.add_argument(
+    "--target",
+    nargs="*",
+    type=str,
+    default=None,
+    metavar="path",
+    help="path of movie, picture, or directory where pictures are stored\n"
+    + "If directory name is given,\n"
+    + "same process will be applied to all pictures in the directory\n ",
+  )
+
+
+def add_argument_target_only_movie(parser: argparse.ArgumentParser):
+  parser.add_argument(
+    "--target",
+    nargs="*",
+    type=str,
+    default=None,
+    metavar="path",
+    help="path of movie\n ",
+  )
+
+
+def add_argument_color(parser: argparse.ArgumentParser):
+  parser.add_argument(
+    "--color", action="store_true", help="to output in color (default=false (gray))\n ",
+  )
+
+
 def cli_execution():
   """read, parse, and execute cli arguments
   """
@@ -245,30 +311,11 @@ def cli_execution():
   )
   subparsers = parser.add_subparsers()
 
-  def add_argument_target(parser: argparse.ArgumentParser):
-    parser.add_argument(
-      "--target",
-      nargs="*",
-      type=str,
-      default=None,
-      metavar="path",
-      help="path of movie, picture, or directory where pictures are stored\n"
-      + "If directory name is given,\n"
-      + "same process will be applied to all pictures in the directory\n",
-    )
-
-  def add_argument_color(parser: argparse.ArgumentParser):
-    parser.add_argument(
-      "--color",
-      action="store_true",
-      help="to output in color (default=false (gray))\n",
-    )
-
   parser_animate = subparsers.add_parser(
     "animate",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to crate movie (mp4) from pictures\n" + "(see sub-option 'animate -h')\n",
-    description="sub-command 'animate': to create movie (mp4) from pictures",
+    help="to create movie (mp4) from input file\n(see sub-option 'animate -h')\n ",
+    description="sub-command 'animate': to create movie (mp4) from input file",
   )
   add_argument_target(parser_animate)
   add_argument_color(parser_animate)
@@ -279,7 +326,7 @@ def cli_execution():
     default=None,
     metavar="fps",
     help="fps of created movie (float)\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_binarize = subparsers.add_parser(
@@ -297,16 +344,16 @@ def cli_execution():
     default=None,
     metavar=("low", "high"),
     help="thresholds of gray-scale luminance (int) [0-255]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_capture = subparsers.add_parser(
     "capture",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to capture movie\n(see sub-option 'capture -h')\n ",
-    description="sub-command 'capture': to capture movie",
+    help="to capture movie, creating pictures\n(see sub-option 'capture -h')\n ",
+    description="sub-command 'capture': to capture movie, creating pictures",
   )
-  add_argument_target(parser_capture)
+  add_argument_target_only_movie(parser_capture)
   add_argument_color(parser_capture)
   parser_capture.set_defaults(call=call_capture)
   parser_capture.add_argument(
@@ -316,7 +363,7 @@ def cli_execution():
     default=None,
     metavar=("start", "stop", "step"),
     help="time at beginning and end of capture and time step (float) [s]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_concatenate = subparsers.add_parser(
@@ -327,17 +374,25 @@ def cli_execution():
     + "max number of targets is 25.\n"
     + "sizes of pictures are adjusted based on first target size.\n",
   )
-  add_argument_target(parser_concatenate)
+  parser_concatenate.add_argument(
+    "--target",
+    nargs="*",
+    type=str,
+    default=None,
+    metavar="path",
+    help="path of movie, picture, or directory where pictures are stored\n"
+    + "If directory name is given,\n"
+    + "pictures in the directory will be concatenated\n ",
+  )
   add_argument_color(parser_concatenate)
   parser_concatenate.set_defaults(call=call_concatenate)
   parser_concatenate.add_argument(
-    "--number",
+    "--number-x",
     type=int,
     default=None,
     metavar=("x"),
-    help="number of targets concatenated in x direction\n"
-    + "max number of targets in each direction is 25.\n"
-    + "if this is not given, you will select this in GUI window\n",
+    help="number of targets concatenated in x direction. max is 5.\n"
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_crop = subparsers.add_parser(
@@ -356,17 +411,26 @@ def cli_execution():
     default=None,
     metavar=("x_1", "y_1", "x_2", "y_2"),
     help="position of cropping (int) [pixel, 1 < 2]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_hist_luminance = subparsers.add_parser(
     "hist-luminance",
     formatter_class=argparse.RawTextHelpFormatter,
     help="to create luminance histgram of picture\n"
-    + "(see sub-option 'hist-luminance -h')\n",
+    + "(see sub-option 'hist-luminance -h')\n ",
     description="sub-command 'hist_luminance': to create luminance histgram of picture",
   )
-  add_argument_target(parser_hist_luminance)
+  parser_hist_luminance.add_argument(
+    "--target",
+    nargs="*",
+    type=str,
+    default=None,
+    metavar="path",
+    help="path of picture or directory where pictures are stored\n"
+    + "If directory name is given,\n"
+    + "same process will be applied to all pictures in the directory\n ",
+  )
   add_argument_color(parser_hist_luminance)
   parser_hist_luminance.set_defaults(call=call_hist_luminance)
 
@@ -386,13 +450,13 @@ def cli_execution():
     default=None,
     metavar=("x", "y"),
     help="scaling ratio (float) [x,y]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   parser_rotate = subparsers.add_parser(
     "rotate",
     formatter_class=argparse.RawTextHelpFormatter,
-    help="to rotate movie/picture\n(see sub-option 'rotate -h')\n",
+    help="to rotate movie/picture\n(see sub-option 'rotate -h')\n ",
     description="sub-command 'rotate': to rotate movie/picture",
   )
   add_argument_target(parser_rotate)
@@ -404,7 +468,51 @@ def cli_execution():
     default=None,
     metavar=("degree"),
     help="degree of rotation (float) [degree]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    + "if this is not given, you will select this in GUI window\n ",
+  )
+
+  parser_subtitle = subparsers.add_parser(
+    "subtitle",
+    formatter_class=argparse.RawTextHelpFormatter,
+    help="to subtitle movie/picture\n(see sub-option 'subtitle -h')\n ",
+    description="sub-command 'subtitle': to subtitle movie/picture",
+  )
+  add_argument_target(parser_subtitle)
+  add_argument_color(parser_subtitle)
+  parser_subtitle.set_defaults(call=call_subtitle)
+  parser_subtitle.add_argument(
+    "--time",
+    nargs=2,
+    type=float,
+    default=None,
+    metavar=("start", "stop"),
+    help="time at beginning and end of subtitling (float) [s]\n"
+    + "this argument is neglected for picture or directory\n"
+    + "if this is not given, you will select this in GUI window\n ",
+  )
+  parser_subtitle.add_argument(
+    "--position",
+    nargs=2,
+    type=int,
+    default=None,
+    metavar=("x", "y"),
+    help="position of left end of text (int) [pixel]\n"
+    + "if this is not given, you will select this in GUI window\n ",
+  )
+  parser_subtitle.add_argument(
+    "--size",
+    type=float,
+    default=None,
+    metavar=("size"),
+    help="size of text\n"
+    + "if this is not given, you will select this in GUI window\n ",
+  )
+  parser_subtitle.add_argument(
+    "--text",
+    type=str,
+    default="text",
+    metavar=("text"),
+    help="text to be added into movie/picture. default is 'text'\n ",
   )
 
   parser_trim = subparsers.add_parser(
@@ -413,7 +521,7 @@ def cli_execution():
     help="to trim movie (mp4)\n(see sub-option 'trim -h')\n ",
     description="sub-command 'trim': to trim movie (mp4)",
   )
-  add_argument_target(parser_trim)
+  add_argument_target_only_movie(parser_trim)
   add_argument_color(parser_trim)
   parser_trim.set_defaults(call=call_trim)
   parser_trim.add_argument(
@@ -422,8 +530,8 @@ def cli_execution():
     type=float,
     default=None,
     metavar=("start", "stop"),
-    help="time at beginning and end of trim (float) [s]\n"
-    + "if this is not given, you will select this in GUI window\n",
+    help="time at beginning and end of trimming (float) [s]\n"
+    + "if this is not given, you will select this in GUI window\n ",
   )
 
   if len(sys.argv) <= 1:
