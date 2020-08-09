@@ -357,7 +357,7 @@ def subtitle(
   *,
   target_list: List[str],
   is_colored: bool = False,
-  text: str = "text",
+  text: Optional[str] = None,
   position: Optional[Tuple[int, int]] = None,
   size: Optional[float] = None,
   time: Optional[Tuple[float, float]] = None,
@@ -368,7 +368,7 @@ def subtitle(
       target_list (List[str]): list of movies, pictures or directories where pictures
       are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      text (str, optional): text to be added into movie/picture. Defaults to "text".
+      text (Optional[str], optional): text to be added into movie/picture. Defaults to None.
       position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel]. Defaults to None. if this is not given, you will select this in GUI window.
       size (Optional[float], optional): size of text. Defaults to None. if this is not given, you will select this in GUI window.
       time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s]. this argument is neglected for picture or directory. Defaults to None. if this is not given, you will select this in GUI window.

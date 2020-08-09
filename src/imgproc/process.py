@@ -7,7 +7,8 @@ import numpy
 import pathlib
 from abc import ABCMeta, abstractmethod
 from matplotlib import pyplot
-from typing import List, Optional, Tuple, Union
+from PIL import Image, ImageDraw, ImageFont
+from typing import List, Optional, Tuple
 
 
 def sort_target_type(target_list: List[str]) -> Tuple[List[str], List[str], List[str]]:
@@ -44,6 +45,18 @@ def no(no):
 class ABCProcess(metaclass=ABCMeta):
   """abstract base class for image processing class"""
 
+  def __init__(
+    self, *, target_list: List[str] = [], is_colored: bool = False,
+  ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+    """
+    self.__target_list = target_list
+    self.__colored = is_colored
+
   @abstractmethod
   def execute(self) -> Optional[List[str]]:
     """image process
@@ -52,6 +65,12 @@ class ABCProcess(metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
+
+  def _get_target_list(self) -> List[str]:
+    return self.__target_list
+
+  def _is_colored(self) -> bool:
+    return self.__colored
 
   def _get_movie_info(self, cap: cv2.VideoCapture) -> Tuple[int, int, int, float]:
     """get movie information
@@ -168,19 +187,19 @@ class ABCProcess(metaclass=ABCMeta):
       else:
         return (True, False)
 
-  def _add_texts_upper_left(self, image: numpy.array, texts: List[str]):
+  def _add_texts_upper_left(self, img: numpy.array, texts: List[str]):
     """add texts into upper left corner of cv2 object
 
     Args:
-        image (numpy.array): cv2 image object
+        img (numpy.array): cv2 image object
         texts (List[str]): texts
     """
     position = (5, 0)
 
     for id, text in enumerate(texts):
       pos = (position[0], position[1] + 30 * (id + 1))
-      cv2.putText(image, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 10)
-      cv2.putText(image, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 2)
+      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 10)
+      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 2)
 
 
 class ABCAnimatingProcess(ABCProcess, metaclass=ABCMeta):
@@ -200,8 +219,7 @@ class ABCAnimatingProcess(ABCProcess, metaclass=ABCMeta):
         is_colored (bool, optional): whether to output in color. Defaults to False.
         fps (Optional[float], optional): fps of created movie. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__fps = fps
 
   @abstractmethod
@@ -212,12 +230,6 @@ class ABCAnimatingProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
 
   def _get_fps(self) -> Optional[float]:
     return self.__fps
@@ -246,6 +258,13 @@ class AnimatingMovie(ABCAnimatingProcess):
     is_colored: bool = False,
     fps: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+        fps (Optional[float], optional): fps of created movie. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, fps=fps)
 
   def execute(self) -> Optional[List[str]]:
@@ -349,6 +368,13 @@ class ABCAnimatingPictureProcess(ABCAnimatingProcess, metaclass=ABCMeta):
     is_colored: bool = False,
     fps: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+        fps (Optional[float], optional): fps of created movie. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, fps=fps)
 
   @abstractmethod
@@ -459,6 +485,13 @@ class AnimatingPicture(ABCAnimatingPictureProcess):
     is_colored: bool = False,
     fps: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+        fps (Optional[float], optional): fps of created movie. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, fps=fps)
 
   def execute(self) -> Optional[List[str]]:
@@ -484,6 +517,13 @@ class AnimatingPictureDirectory(ABCAnimatingPictureProcess):
     is_colored: bool = False,
     fps: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): whether to output in color. Defaults to False.
+        fps (Optional[float], optional): fps of created movie. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, fps=fps)
 
   def execute(self) -> Optional[List[str]]:
@@ -524,7 +564,7 @@ class ABCBinarizingProcess(ABCProcess, metaclass=ABCMeta):
     Args:
         target_list (List[str], optional): list of target inputs. Defaults to []        thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__target_list = target_list
+    super().__init__(target_list=target_list, is_colored=False)
     self.__thresholds = thresholds
 
   @abstractmethod
@@ -535,9 +575,6 @@ class ABCBinarizingProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
 
   def _get_thresholds(self) -> Optional[Tuple[int, int]]:
     return self.__thresholds
@@ -565,6 +602,11 @@ class BinarizingMovie(ABCBinarizingProcess):
   def __init__(
     self, *, target_list: List[str] = [], thresholds: Optional[Tuple[int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(target_list=target_list, thresholds=thresholds)
 
   def execute(self) -> Optional[List[str]]:
@@ -683,6 +725,11 @@ class BinarizingPicture(ABCBinarizingProcess):
   def __init__(
     self, *, target_list: List[str] = [], thresholds: Optional[Tuple[int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(target_list=target_list, thresholds=thresholds)
 
   def execute(self) -> Optional[List[str]]:
@@ -786,6 +833,11 @@ class BinarizingPictureDirectory(ABCBinarizingProcess):
   def __init__(
     self, *, target_list: List[str] = [], thresholds: Optional[Tuple[int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        thresholds (Optional[Tuple[int, int]], optional): threshold values to be used to binarize. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(target_list=target_list, thresholds=thresholds)
 
   def execute(self) -> Optional[List[str]]:
@@ -891,8 +943,8 @@ class BinarizingPictureDirectory(ABCBinarizingProcess):
           return None
 
 
-class ABCCapturingProcess(ABCProcess, metaclass=ABCMeta):
-  """abstract base class of capturing process"""
+class CapturingMovie(ABCProcess):
+  """class to capture movie"""
 
   def __init__(
     self,
@@ -908,78 +960,11 @@ class ABCCapturingProcess(ABCProcess, metaclass=ABCMeta):
         is_colored (bool, optional): flag to output in color. Defaults to False.
         times (Tuple[float, float, float], optional): [start, stop, step] parameters for capturing movie (s). If this variable is None, this will be selected using GUI window Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__times = times
 
-  @abstractmethod
-  def execute(self) -> Optional[List[str]]:
-    """capturing process
-
-    Returns:
-        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
-    """
-    pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
-
-  def _get_times(self) -> Optional[Tuple[float, float, float]]:
+  def __get_times(self) -> Optional[Tuple[float, float, float]]:
     return self.__times
-
-  def _create_start_trackbar(self, cv2_window: str):
-    """create 'start cap\n' trackbar for cv2 GUI"""
-    cv2.createTrackbar("start cap\n", cv2_window, 0, 1, no)
-
-  def _read_start_trackbar(
-    self, cv2_window: str, is_start_on: bool
-  ) -> Tuple[bool, bool]:
-    """read values from 'start cap\n' trackbar
-
-    Returns:
-        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
-    """
-    return self._read_bool_trackbar(cv2_window, "start cap\n", is_start_on)
-
-  def _create_stop_trackbar(self, cv2_window: str):
-    """create 'stop cap\n' trackbar for cv2 GUI"""
-    cv2.createTrackbar("stop cap\n", cv2_window, 0, 1, no)
-
-  def _read_stop_trackbar(self, cv2_window: str, is_stop_on: bool) -> Tuple[bool, bool]:
-    """read values from 'stop cap\n' trackbar
-
-    Returns:
-        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
-    """
-    return self._read_bool_trackbar(cv2_window, "stop cap\n", is_stop_on)
-
-  def _create_step_trackbars(self, cv2_window: str):
-    """create 'step 10ms\n' trackbar for cv2 GUI"""
-    cv2.createTrackbar("step 10ms\n", cv2_window, 100, 100, no)
-
-  def _read_step_trackbar(self, cv2_window: str) -> float:
-    """read values from 'step 10ms\n' trackbars
-
-    Returns:
-        float: time step
-    """
-    return cv2.getTrackbarPos("step 10ms\n", cv2_window) * 10 * 0.001
-
-
-class CapturingMovie(ABCCapturingProcess):
-  """class to capture movie"""
-
-  def __init__(
-    self,
-    *,
-    target_list: List[str] = [],
-    is_colored: bool = False,
-    times: Optional[Tuple[float, float, float]] = None,
-  ):
-    super().__init__(target_list=target_list, is_colored=is_colored, times=times)
 
   def execute(self) -> Optional[List[str]]:
     """capturing process
@@ -995,8 +980,8 @@ class CapturingMovie(ABCCapturingProcess):
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = self._get_movie_info(cap)
 
-      if self._get_times() is not None:
-        time = self._get_times()
+      if self.__get_times() is not None:
+        time = self.__get_times()
       else:
         time = self.__select_times(str(output_path), frames, fps, cap)
 
@@ -1062,20 +1047,20 @@ class CapturingMovie(ABCCapturingProcess):
     help_exists, is_start_on, is_stop_on = False, False, False
     start_time, stop_time = 0.0, 0.0
     self._create_frame_trackbars(movie, frames)
-    self._create_start_trackbar(movie)
-    self._create_stop_trackbar(movie)
-    self._create_step_trackbars(movie)
+    self.__create_start_trackbar(movie)
+    self.__create_stop_trackbar(movie)
+    self.__create_step_trackbars(movie)
 
     while True:
 
       tgt_frame = self._read_frame_trackbars(movie, frames)
-      time_step = self._read_step_trackbar(movie)
+      time_step = self.__read_step_trackbar(movie)
 
-      is_start_on, is_changed = self._read_start_trackbar(movie, is_start_on)
+      is_start_on, is_changed = self.__read_start_trackbar(movie, is_start_on)
       if is_changed:
         start_time = tgt_frame / fps if is_start_on else 0.0
 
-      is_stop_on, is_changed = self._read_stop_trackbar(movie, is_stop_on)
+      is_stop_on, is_changed = self.__read_stop_trackbar(movie, is_stop_on)
       if is_changed:
         stop_time = tgt_frame / fps if is_stop_on else 0.0
 
@@ -1128,6 +1113,46 @@ class CapturingMovie(ABCCapturingProcess):
         if self._press_q_or_Esc(k):
           return None
 
+  def __create_start_trackbar(self, cv2_window: str):
+    """create 'start cap\n' trackbar for cv2 GUI"""
+    cv2.createTrackbar("start cap\n", cv2_window, 0, 1, no)
+
+  def __read_start_trackbar(
+    self, cv2_window: str, is_start_on: bool
+  ) -> Tuple[bool, bool]:
+    """read values from 'start cap\n' trackbar
+
+    Returns:
+        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
+    """
+    return self._read_bool_trackbar(cv2_window, "start cap\n", is_start_on)
+
+  def __create_stop_trackbar(self, cv2_window: str):
+    """create 'stop cap\n' trackbar for cv2 GUI"""
+    cv2.createTrackbar("stop cap\n", cv2_window, 0, 1, no)
+
+  def __read_stop_trackbar(
+    self, cv2_window: str, is_stop_on: bool
+  ) -> Tuple[bool, bool]:
+    """read values from 'stop cap\n' trackbar
+
+    Returns:
+        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
+    """
+    return self._read_bool_trackbar(cv2_window, "stop cap\n", is_stop_on)
+
+  def __create_step_trackbars(self, cv2_window: str):
+    """create 'step 10ms\n' trackbar for cv2 GUI"""
+    cv2.createTrackbar("step 10ms\n", cv2_window, 100, 100, no)
+
+  def __read_step_trackbar(self, cv2_window: str) -> float:
+    """read values from 'step 10ms\n' trackbars
+
+    Returns:
+        float: time step
+    """
+    return cv2.getTrackbarPos("step 10ms\n", cv2_window) * 10 * 0.001
+
 
 class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
   """abstract base class of concatenating process"""
@@ -1145,8 +1170,7 @@ class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
         target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
         number_x (Optional[int], optional): number of targets concatenated in x direction. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__number_x = number_x
 
   @abstractmethod
@@ -1157,12 +1181,6 @@ class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
 
   def _get_number_x(self) -> Optional[int]:
     return self.__number_x
@@ -1188,11 +1206,11 @@ class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
     else:
       return cv2.getTrackbarPos("x\n", cv2_window)
 
-  def _vconcat_H(self, image_list: List[numpy.array], W: int) -> numpy.array:
+  def _vconcat_H(self, img_list: List[numpy.array], W: int) -> numpy.array:
     """concatenate images in H direction
 
     Args:
-        image_list (List[numpy.array]): list of images
+        img_list (List[numpy.array]): list of images
         W (int): W size
 
     Returns:
@@ -1200,17 +1218,17 @@ class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
     """
     concat_list = []
 
-    for img in image_list:
+    for img in img_list:
       size = (W, int(img.shape[0] * W / img.shape[1]))
       concat_list.append(cv2.resize(img, size, interpolation=cv2.INTER_CUBIC))
 
     return cv2.vconcat(concat_list)
 
-  def _vconcat_W(self, image_list: List[numpy.array], H: int) -> numpy.array:
+  def _vconcat_W(self, img_list: List[numpy.array], H: int) -> numpy.array:
     """concatenate images in W direction
 
     Args:
-        image_list (List[numpy.array]): list of images
+        img_list (List[numpy.array]): list of images
         H (int): H size
 
     Returns:
@@ -1218,7 +1236,7 @@ class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
     """
     concat_list = []
 
-    for img in image_list:
+    for img in img_list:
       size = (int(H / img.shape[0] * img.shape[1]), H)
       concat_list.append(cv2.resize(img, size, interpolation=cv2.INTER_CUBIC))
 
@@ -1235,6 +1253,12 @@ class ConcatenatingMovie(ABCConcatenatingProcess):
     is_colored: bool = False,
     number_x: Optional[int] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        number_x (Optional[int], optional): number of targets concatenated in x direction. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, number_x=number_x)
 
   def execute(self) -> Optional[List[str]]:
@@ -1353,23 +1377,23 @@ class ConcatenatingMovie(ABCConcatenatingProcess):
     Returns:
         numpy.array: concatenated image
     """
-    black_image_list, pic_list = [], []
+    black_img_list, pic_list = [], []
 
     for id, movie in enumerate(movie_list):
 
       cap = cv2.VideoCapture(movie)
       W, H = cap.get(cv2.CAP_PROP_FRAME_WIDTH), cap.get(cv2.CAP_PROP_FRAME_HEIGHT)
-      black_image_list.append(numpy.zeros((int(H), int(W), 3), numpy.uint8))
+      black_img_list.append(numpy.zeros((int(H), int(W), 3), numpy.uint8))
 
       if frame_number_list[id] < tgt_frame:
-        pic_list.append(black_image_list[id])
+        pic_list.append(black_img_list[id])
       else:
         cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
         ret, img = cap.read()
         pic_list.append(img)
 
     for id in range(number_x * number_y - len(movie_list)):
-      pic_list.append(black_image_list[0])
+      pic_list.append(black_img_list[0])
 
     multi = [pic_list[y * number_x : y * number_x + number_x] for y in range(number_y)]
     concat_W_list = [self._vconcat_W(one, pic_list[0].shape[0]) for one in multi]
@@ -1386,6 +1410,12 @@ class ABCConcatenatingPictureProcess(ABCConcatenatingProcess, metaclass=ABCMeta)
     is_colored: bool = False,
     number_x: Optional[int] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        number_x (Optional[int], optional): number of targets concatenated in x direction. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, number_x=number_x)
 
   @abstractmethod
@@ -1516,6 +1546,12 @@ class ConcatenatingPicture(ABCConcatenatingPictureProcess):
     is_colored: bool = False,
     number_x: Optional[int] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        number_x (Optional[int], optional): number of targets concatenated in x direction. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, number_x=number_x)
 
   def execute(self) -> Optional[List[str]]:
@@ -1541,6 +1577,12 @@ class ConcatenatingPictureDirectory(ABCConcatenatingPictureProcess):
     is_colored: bool = False,
     number_x: Optional[int] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        number_x (Optional[int], optional): number of targets concatenated in x direction. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, number_x=number_x)
 
   def execute(self) -> Optional[List[str]]:
@@ -1587,8 +1629,7 @@ class ABCCroppingProcess(ABCProcess, metaclass=ABCMeta):
         target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
         positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop. If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__positions = positions
 
   @abstractmethod
@@ -1599,12 +1640,6 @@ class ABCCroppingProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
 
   def _get_positions(self) -> Optional[Tuple[int, int, int, int]]:
     return self.__positions
@@ -1645,6 +1680,12 @@ class CroppingMovie(ABCCroppingProcess):
     is_colored: bool = False,
     positions: Optional[Tuple[int, int, int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(
       target_list=target_list, is_colored=is_colored, positions=positions
     )
@@ -1772,6 +1813,12 @@ class CroppingPicture(ABCCroppingProcess):
     is_colored: bool = False,
     positions: Optional[Tuple[int, int, int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(
       target_list=target_list, is_colored=is_colored, positions=positions
     )
@@ -1883,6 +1930,12 @@ class CroppingPictureDirectory(ABCCroppingProcess):
     is_colored: bool = False,
     positions: Optional[Tuple[int, int, int, int]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        positions (Optional[Tuple[int, int, int, int]], optional): [x_1, y_1,x_2, y_2] two positions to crop. If this variable is None, this will be selected using GUI window. Defaults to None.
+    """
     super().__init__(
       target_list=target_list, is_colored=is_colored, positions=positions
     )
@@ -2003,8 +2056,7 @@ class ABCCreatingLuminanceHistgramProcess(ABCProcess, metaclass=ABCMeta):
         target_list (List[str], optional): list of target inputs. Defaults to [].
         is_colored (bool, optional): flag to output in color. Defaults to False.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
 
   @abstractmethod
   def execute(self) -> Optional[List[str]]:
@@ -2014,12 +2066,6 @@ class ABCCreatingLuminanceHistgramProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
 
   def _create_color_figure_luminance_histgram(
     self, picture: str, output_path: pathlib.Path
@@ -2072,6 +2118,12 @@ class CreatingLuminanceHistgramPicture(ABCCreatingLuminanceHistgramProcess):
   """class to create luminance histgram of picture"""
 
   def __init__(self, *, target_list: List[str] = [], is_colored: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored)
 
   def execute(self) -> Optional[List[str]]:
@@ -2102,6 +2154,12 @@ class CreatingLuminanceHistgramPictureDirectory(ABCCreatingLuminanceHistgramProc
   """class to create luminance histgram of picture"""
 
   def __init__(self, *, target_list: List[str] = [], is_colored: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored)
 
   def execute(self) -> Optional[List[str]]:
@@ -2153,8 +2211,7 @@ class ABCResizingProcess(ABCProcess, metaclass=ABCMeta):
         target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
         scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__scales = scales
 
   @abstractmethod
@@ -2165,12 +2222,6 @@ class ABCResizingProcess(ABCProcess, metaclass=ABCMeta):
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
     """
     pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
 
   def _get_scales(self) -> Optional[Tuple[float, float]]:
     return self.__scales
@@ -2207,6 +2258,12 @@ class ResizingMovie(ABCResizingProcess):
     is_colored: bool = False,
     scales: Optional[Tuple[float, float]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, scales=scales)
 
   def execute(self) -> Optional[List[str]]:
@@ -2317,6 +2374,12 @@ class ResizingPicture(ABCResizingProcess):
     is_colored: bool = False,
     scales: Optional[Tuple[float, float]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, scales=scales)
 
   def execute(self) -> Optional[List[str]]:
@@ -2410,6 +2473,12 @@ class ResizingPictureDirectory(ABCResizingProcess):
     is_colored: bool = False,
     scales: Optional[Tuple[float, float]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        scales (Optional[Tuple[float, float]], optional): [x, y] ratios to scale. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, scales=scales)
 
   def execute(self) -> Optional[List[str]]:
@@ -2521,8 +2590,7 @@ class ABCRotatingProcess(ABCProcess, metaclass=ABCMeta):
         is_colored (bool, optional): flag to output in color. Defaults to False.
         degree (Optional[float], optional): degree of rotation. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__degree = degree
 
   @abstractmethod
@@ -2623,6 +2691,13 @@ class RotatingMovie(ABCRotatingProcess):
     is_colored: bool = False,
     degree: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        degree (Optional[float], optional): degree of rotation. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, degree=degree)
 
   def execute(self) -> Optional[List[str]]:
@@ -2735,6 +2810,13 @@ class RotatingPicture(ABCRotatingProcess):
     is_colored: bool = False,
     degree: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        degree (Optional[float], optional): degree of rotation. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, degree=degree)
 
   def execute(self) -> Optional[List[str]]:
@@ -2823,6 +2905,13 @@ class RotatingPictureDirectory(ABCRotatingProcess):
     is_colored: bool = False,
     degree: Optional[float] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        degree (Optional[float], optional): degree of rotation. Defaults to None.
+    """
     super().__init__(target_list=target_list, is_colored=is_colored, degree=degree)
 
   def execute(self) -> Optional[List[str]]:
@@ -2921,24 +3010,27 @@ class ABCSubtitlingProcess(ABCProcess, metaclass=ABCMeta):
     *,
     target_list: List[str] = [],
     is_colored: bool = False,
-    text: str = "text",
+    text: str = None,
     position: Optional[Tuple[int, int]] = None,
     size: Optional[float] = None,
+    time: Optional[Tuple[float, float]] = None,
   ):
     """constructor
 
     Args:
         target_list (List[str], optional): list of target inputs. Defaults to [].
         is_colored (bool, optional): flag to output in color. Defaults to False.
-        text (str, optional): text to be added into movie/picture. Defaults to "text".
+        text (Optional[str], optional): text to be added into movie/picture. Defaults to None.
         position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel]. Defaults to None. if this is not given, you will select this in GUI window.
-        size (Optional[float], optional): size of text. Defaults to None. if this is not given, you will select this in GUI window.
+        size (Optional[float], optional): size of text. Defaults to None. if this is not
+        given, you will select this in GUI window.
+        time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s]. this argument is neglected for picture or directory. Defaults to None. if this is not given, you will select this in GUI window.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__text = text
     self.__position = position
     self.__size = size
+    self.__time = time
 
   @abstractmethod
   def execute(self) -> Optional[List[str]]:
@@ -2949,13 +3041,7 @@ class ABCSubtitlingProcess(ABCProcess, metaclass=ABCMeta):
     """
     pass
 
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
-
-  def _get_text(self) -> str:
+  def _get_text(self) -> Optional[str]:
     return self.__text
 
   def _get_position(self) -> Optional[Tuple[int, int]]:
@@ -2963,6 +3049,9 @@ class ABCSubtitlingProcess(ABCProcess, metaclass=ABCMeta):
 
   def _get_size(self) -> Optional[float]:
     return self.__size
+
+  def _get_time(self) -> Optional[Tuple[float, float]]:
+    return self.__time
 
   def _create_start_trackbar(self, cv2_window: str):
     """create 'start cap\n' trackbar for cv2 GUI"""
@@ -3024,7 +3113,7 @@ class SubtitlingMovie(ABCSubtitlingProcess):
     *,
     target_list: List[str] = [],
     is_colored: bool = False,
-    text: str = "text",
+    text: Optional[str] = None,
     position: Optional[Tuple[int, int]] = None,
     size: Optional[float] = None,
     time: Optional[Tuple[float, float]] = None,
@@ -3034,9 +3123,10 @@ class SubtitlingMovie(ABCSubtitlingProcess):
     Args:
         target_list (List[str], optional): list of target inputs. Defaults to [].
         is_colored (bool, optional): flag to output in color. Defaults to False.
-        text (str, optional): text to be added into movie/picture. Defaults to "text".
+        text (Optional[str], optional): text to be added into movie/picture. Defaults to None.
         position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel]. Defaults to None. if this is not given, you will select this in GUI window.
-        size (Optional[float], optional): size of text. Defaults to None. if this is not given, you will select this in GUI window.
+        size (Optional[float], optional): size of text. Defaults to None. if this is not
+        given, you will select this in GUI window.
         time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s]. this argument is neglected for picture or directory. Defaults to None. if this is not given, you will select this in GUI window.
     """
     super().__init__(
@@ -3045,11 +3135,8 @@ class SubtitlingMovie(ABCSubtitlingProcess):
       text=text,
       position=position,
       size=size,
+      time=time,
     )
-    self.__time = time
-
-  def _get_time(self) -> Optional[Tuple[float, float]]:
-    return self.__time
 
   def execute(self) -> Optional[List[str]]:
     """subtitling process
@@ -3109,7 +3196,7 @@ class SubtitlingMovie(ABCSubtitlingProcess):
     frames: int,
     fps: float,
     cap: cv2.VideoCapture,
-    text: str,
+    text: Optional[str],
     position: Optional[Tuple[int, int]],
     size: Optional[float],
     time: Optional[Tuple[float, float]],
@@ -3121,7 +3208,7 @@ class SubtitlingMovie(ABCSubtitlingProcess):
         frames (int): number of total frames of movie
         fps (float): fps of movie
         cap (cv2.VideoCapture): cv2 video object
-        text (str, optional): text to be added into movie/picture.
+        text (Optional[str], optional): text to be added into movie/picture.
         position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel].
         size (Optional[float], optional): size of text. Defaults to None.
         time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s].
@@ -3162,6 +3249,12 @@ class SubtitlingMovie(ABCSubtitlingProcess):
 
       cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
       ret, img = cap.read()
+
+      if point:
+        cv2.putText(
+          img, text, point[0], cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 10
+        )
+        cv2.putText(img, text, point[0], cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 2)
 
       if help_exists:
         h = ["[subtitle]", "select position, size, time", "s: save"]
@@ -3208,16 +3301,29 @@ class SubtitlingPicture(ABCSubtitlingProcess):
     *,
     target_list: List[str] = [],
     is_colored: bool = False,
-    text: str = "text",
+    text: Optional[str] = None,
     position: Optional[Tuple[int, int]] = None,
     size: Optional[float] = None,
+    time: Optional[Tuple[float, float]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        text (Optional[str], optional): text to be added into movie/picture. Defaults to None.
+        position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel]. Defaults to None. if this is not given, you will select this in GUI window.
+        size (Optional[float], optional): size of text. Defaults to None. if this is not
+        given, you will select this in GUI window.
+        time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s]. this argument is neglected for picture or directory. Defaults to None. if this is not given, you will select this in GUI window.
+    """
     super().__init__(
       target_list=target_list,
       is_colored=is_colored,
       text=text,
       position=position,
       size=size,
+      time=None,
     )
 
   def execute(self) -> Optional[List[str]]:
@@ -3260,16 +3366,29 @@ class SubtitlingPictureDirectory(ABCSubtitlingProcess):
     *,
     target_list: List[str] = [],
     is_colored: bool = False,
+    text: Optional[str] = None,
     position: Optional[Tuple[int, int]] = None,
     size: Optional[float] = None,
-    text: str = "text",
+    time: Optional[Tuple[float, float]] = None,
   ):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to [].
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        text (Optional[str], optional): text to be added into movie/picture. Defaults to None.
+        position (Optional[Tuple[int, int]], optional): position of left end of text (int) [pixel]. Defaults to None. if this is not given, you will select this in GUI window.
+        size (Optional[float], optional): size of text. Defaults to None. if this is not
+        given, you will select this in GUI window.
+        time (Optional[Tuple[float, float]]): time at beginning and end of subtitling (float) [s]. this argument is neglected for picture or directory. Defaults to None. if this is not given, you will select this in GUI window.
+    """
     super().__init__(
       target_list=target_list,
       is_colored=is_colored,
+      text=text,
       position=position,
       size=size,
-      text=text,
+      time=None,
     )
 
   def execute(self) -> Optional[List[str]]:
@@ -3312,8 +3431,8 @@ class SubtitlingPictureDirectory(ABCSubtitlingProcess):
     # return return_list if return_list else None
 
 
-class ABCTrimmingProcess(ABCProcess, metaclass=ABCMeta):
-  """abstract base class of trimming process"""
+class TrimmingMovie(ABCProcess):
+  """class to trim movie"""
 
   def __init__(
     self,
@@ -3329,66 +3448,11 @@ class ABCTrimmingProcess(ABCProcess, metaclass=ABCMeta):
         is_colored (bool, optional): flag to output in color. Defaults to False.
         times (Tuple[float, float], optional): [start, stop] parameters for trimming (s). If this variable is None, this will be selected using GUI window. Defaults to None.
     """
-    self.__target_list = target_list
-    self.__colored = is_colored
+    super().__init__(target_list=target_list, is_colored=is_colored)
     self.__times = times
 
-  @abstractmethod
-  def execute(self) -> Optional[List[str]]:
-    """trimming process
-
-    Returns:
-        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
-    """
-    pass
-
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
-
-  def _get_times(self) -> Optional[Tuple[float, float]]:
+  def __get_times(self) -> Optional[Tuple[float, float]]:
     return self.__times
-
-  def _create_start_trackbar(self, cv2_window: str):
-    """create 'start cap\n' trackbar for cv2 GUI"""
-    cv2.createTrackbar("start cap\n", cv2_window, 0, 1, no)
-
-  def _read_start_trackbar(
-    self, cv2_window: str, is_start_on: bool
-  ) -> Tuple[bool, bool]:
-    """read values from 'start cap\n' trackbar
-
-    Returns:
-        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
-    """
-    return self._read_bool_trackbar(cv2_window, "start cap\n", is_start_on)
-
-  def _create_stop_trackbar(self, cv2_window: str):
-    """create 'stop cap\n' trackbar for cv2 GUI"""
-    cv2.createTrackbar("stop cap\n", cv2_window, 0, 1, no)
-
-  def _read_stop_trackbar(self, cv2_window: str, is_stop_on: bool) -> Tuple[bool, bool]:
-    """read values from 'stop cap\n' trackbar
-
-    Returns:
-        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
-    """
-    return self._read_bool_trackbar(cv2_window, "stop cap\n", is_stop_on)
-
-
-class TrimmingMovie(ABCTrimmingProcess):
-  """class to trim movie"""
-
-  def __init__(
-    self,
-    *,
-    target_list: List[str] = [],
-    is_colored: bool = False,
-    times: Optional[Tuple[float, float]] = None,
-  ):
-    super().__init__(target_list=target_list, is_colored=is_colored, times=times)
 
   def execute(self) -> Optional[List[str]]:
     """trimming process
@@ -3405,8 +3469,8 @@ class TrimmingMovie(ABCTrimmingProcess):
       cap = cv2.VideoCapture(movie)
       W, H, frames, fps = self._get_movie_info(cap)
 
-      if self._get_times() is not None:
-        time = self._get_times()
+      if self.__get_times() is not None:
+        time = self.__get_times()
       else:
         time = self.__select_times(str(output_path), frames, fps, cap)
 
@@ -3463,18 +3527,18 @@ class TrimmingMovie(ABCTrimmingProcess):
     help_exists, is_start_on, is_stop_on = False, False, False
     start_time, stop_time = 0.0, 0.0
     self._create_frame_trackbars(movie, frames)
-    self._create_start_trackbar(movie)
-    self._create_stop_trackbar(movie)
+    self.__create_start_trackbar(movie)
+    self.__create_stop_trackbar(movie)
 
     while True:
 
       tgt_frame = self._read_frame_trackbars(movie, frames)
 
-      is_start_on, is_changed = self._read_start_trackbar(movie, is_start_on)
+      is_start_on, is_changed = self.__read_start_trackbar(movie, is_start_on)
       if is_changed:
         start_time = tgt_frame / fps if is_start_on else 0.0
 
-      is_stop_on, is_changed = self._read_stop_trackbar(movie, is_stop_on)
+      is_stop_on, is_changed = self.__read_stop_trackbar(movie, is_stop_on)
       if is_changed:
         stop_time = tgt_frame / fps if is_stop_on else 0.0
 
@@ -3512,3 +3576,31 @@ class TrimmingMovie(ABCTrimmingProcess):
       else:
         if self._press_q_or_Esc(k):
           return None
+
+  def __create_start_trackbar(self, cv2_window: str):
+    """create 'start cap\n' trackbar for cv2 GUI"""
+    cv2.createTrackbar("start cap\n", cv2_window, 0, 1, no)
+
+  def __read_start_trackbar(
+    self, cv2_window: str, is_start_on: bool
+  ) -> Tuple[bool, bool]:
+    """read values from 'start cap\n' trackbar
+
+    Returns:
+        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
+    """
+    return self._read_bool_trackbar(cv2_window, "start cap\n", is_start_on)
+
+  def __create_stop_trackbar(self, cv2_window: str):
+    """create 'stop cap\n' trackbar for cv2 GUI"""
+    cv2.createTrackbar("stop cap\n", cv2_window, 0, 1, no)
+
+  def __read_stop_trackbar(
+    self, cv2_window: str, is_stop_on: bool
+  ) -> Tuple[bool, bool]:
+    """read values from 'stop cap\n' trackbar
+
+    Returns:
+        Tuple[bool, bool]: [is_trackbar_on, is_trackbar_changed]
+    """
+    return self._read_bool_trackbar(cv2_window, "stop cap\n", is_stop_on)

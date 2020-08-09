@@ -12,37 +12,24 @@ see usage '-h option'
 """
 import argparse
 import sys
-from imgproc import process
+from imgproc import process, font
 
 
-def call_check_arg(
-  arg_name: str, args: argparse.Namespace, parser: argparse.ArgumentParser
-):
-  """check if required cli-arguments are given
-
-  Args:
-      arg_name (str): subcommand name
-      args (argparse.Namespace): argparse.Namespace object
-      parser (argparse.ArgumentParser): argparse.ArgumentParser object
+def call_base(args: argparse.Namespace, parser: argparse.ArgumentParser):
+  """call function when no sub-command is given
   """
-  items = [
-    value
-    for key, value in args.__dict__.items()
-    if (key != "call") and (key != "color") and (key != "text")
-  ]
+  if args.available_font:
+    font.AvailableFontManager.display_font_list()
+    sys.exit()
 
-  if not [item for item in items if item is not None]:
-    sys.exit(parser.parse_args([arg_name, "--help"]))
-
-  if hasattr(args, "target"):
-    if not args.target:
-      sys.exit("no target is given!")
+  if not check_arg(args):
+    sys.exit(parser.parse_args(["--help"]))
 
 
 def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when animate command is given
+  """call function when animate sub-command is given
   """
-  call_check_arg("animate", args, parser)
+  check_arg_subcommand("animate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not p_list and not d_list:
@@ -60,9 +47,9 @@ def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_binarize(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when binarize command is given
+  """call function when binarize sub-command is given
   """
-  call_check_arg("binarize", args, parser)
+  check_arg_subcommand("binarize", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -81,9 +68,9 @@ def call_binarize(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when capture command is given
+  """call function when capture sub-command is given
   """
-  call_check_arg("capture", args, parser)
+  check_arg_subcommand("capture", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list:
@@ -96,9 +83,9 @@ def call_capture(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when concatenate command is given
+  """call function when concatenate sub-command is given
   """
-  call_check_arg("concatenate", args, parser)
+  check_arg_subcommand("concatenate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -121,9 +108,9 @@ def call_concatenate(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when crop command is given
+  """call function when crop sub-command is given
   """
-  call_check_arg("crop", args, parser)
+  check_arg_subcommand("crop", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -146,9 +133,9 @@ def call_crop(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_hist_luminance(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when hist_luminance command is given
+  """call function when hist_luminance sub-command is given
   """
-  call_check_arg("hist-luminance", args, parser)
+  check_arg_subcommand("hist-luminance", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not p_list and not d_list:
@@ -166,9 +153,9 @@ def call_hist_luminance(args: argparse.Namespace, parser: argparse.ArgumentParse
 
 
 def call_resize(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when resize command is given
+  """call function when resize sub-command is given
   """
-  call_check_arg("resize", args, parser)
+  check_arg_subcommand("resize", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -191,9 +178,9 @@ def call_resize(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when rotate command is given
+  """call function when rotate sub-command is given
   """
-  call_check_arg("rotate", args, parser)
+  check_arg_subcommand("rotate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -216,9 +203,9 @@ def call_rotate(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_subtitle(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when subtitle command is given
+  """call function when subtitle sub-command is given
   """
-  call_check_arg("subtitle", args, parser)
+  check_arg_subcommand("subtitle", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list and not p_list and not d_list:
@@ -254,9 +241,9 @@ def call_subtitle(args: argparse.Namespace, parser: argparse.ArgumentParser):
 
 
 def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
-  """call function when trim command is given
+  """call function when trim sub-command is given
   """
-  call_check_arg("trim", args, parser)
+  check_arg_subcommand("trim", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
   if not m_list:
@@ -266,6 +253,41 @@ def call_trim(args: argparse.Namespace, parser: argparse.ArgumentParser):
     process.TrimmingMovie(
       target_list=m_list, is_colored=args.color, times=args.time
     ).execute()
+
+
+def check_arg(args: argparse.Namespace):
+  """check if required cli-arguments are given
+
+  Args:
+      args (argparse.Namespace): argparse.Namespace object
+
+  Returns:
+      bool: False if arguments are not enough
+  """
+  arg_list = [value for key, value in args.__dict__.items() if (key != "call")]
+
+  if not [arg for arg in arg_list if (arg is not None) and (arg is not False)]:
+    return False
+  else:
+    return True
+
+
+def check_arg_subcommand(
+  arg_name: str, args: argparse.Namespace, parser: argparse.ArgumentParser
+):
+  """check if required cli-arguments are given
+
+  Args:
+      arg_name (str): subcommand name
+      args (argparse.Namespace): argparse.Namespace object
+      parser (argparse.ArgumentParser): argparse.ArgumentParser object
+  """
+  if not check_arg(args):
+    sys.exit(parser.parse_args([arg_name, "--help"]))
+
+  if hasattr(args, "target"):
+    if not args.target:
+      sys.exit("no target is given!")
 
 
 def add_argument_target(parser: argparse.ArgumentParser):
@@ -292,6 +314,24 @@ def add_argument_target_only_movie(parser: argparse.ArgumentParser):
   )
 
 
+def add_argument_available_font(parser: argparse.ArgumentParser):
+  parser.add_argument(
+    "--available-font",
+    action="store_true",
+    help="to see available fonts in this program\n ",
+  )
+
+
+def add_argument_font_type(parser: argparse.ArgumentParser):
+  parser.add_argument(
+    "--font-type",
+    type=str,
+    default=None,
+    metavar="font",
+    help="font type to be used. see available fonts '--available-font'\n",
+  )
+
+
 def add_argument_color(parser: argparse.ArgumentParser):
   parser.add_argument(
     "--color", action="store_true", help="to output in color (default=false (gray))\n ",
@@ -309,6 +349,8 @@ def cli_execution():
     + "Examples:\n"
     + "  imgproc animate --target tmp_dir --fps 20.0 --color\n",
   )
+  add_argument_available_font(parser)
+  parser.set_defaults(call=call_base)
   subparsers = parser.add_subparsers()
 
   parser_animate = subparsers.add_parser(
@@ -510,9 +552,9 @@ def cli_execution():
   parser_subtitle.add_argument(
     "--text",
     type=str,
-    default="text",
+    default=None,
     metavar=("text"),
-    help="text to be added into movie/picture. default is 'text'\n ",
+    help="text to be added into movie/picture\n ",
   )
 
   parser_trim = subparsers.add_parser(
@@ -533,9 +575,6 @@ def cli_execution():
     help="time at beginning and end of trimming (float) [s]\n"
     + "if this is not given, you will select this in GUI window\n ",
   )
-
-  if len(sys.argv) <= 1:
-    sys.exit(parser.format_help())
 
   args = parser.parse_args()
   args.call(args, parser)

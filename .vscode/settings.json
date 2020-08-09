@@ -27,6 +27,7 @@
     "binarized",
     "cmap",
     "dsize",
+    "fname",
     "fourcc",
     "hconcat",
     "imghdr",
@@ -37,6 +38,7 @@
     "nargs",
     "numpy",
     "pyplot",
+    "ttflist",
     "uint",
     "vconcat"
   ],
