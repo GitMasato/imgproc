@@ -2602,12 +2602,6 @@ class ABCRotatingProcess(ABCProcess, metaclass=ABCMeta):
     """
     pass
 
-  def _get_target_list(self) -> List[str]:
-    return self.__target_list
-
-  def _is_colored(self) -> bool:
-    return self.__colored
-
   def _get_degree(self) -> Optional[float]:
     return self.__degree
 
