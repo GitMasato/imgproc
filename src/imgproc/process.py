@@ -295,7 +295,7 @@ class AnimatingMovie(ABCAnimatingProcess):
       self._create_output_directory(output_name)
       fourcc = cv2.VideoWriter_fourcc(*"mp4v")
       output = cv2.VideoWriter(output_name, fourcc, tgt_fps, (W, H), self._is_colored())
-      print("animating pictures...")
+      print("animating movies...")
 
       while True:
 

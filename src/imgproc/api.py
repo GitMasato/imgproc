@@ -31,8 +31,15 @@ def animate(
   m_list, p_list, d_list = process.sort_target_type(target_list)
   return_list: List[str] = []
 
-  if not p_list and not d_list:
-    sys.exit("no picture, directory is given!")
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    r = process.AnimatingMovie(
+      target_list=p_list, is_colored=is_colored, fps=fps
+    ).execute()
+    if r is not None:
+      return_list.extend(r)
 
   if p_list:
     r = process.AnimatingPicture(

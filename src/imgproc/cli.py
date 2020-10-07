@@ -32,8 +32,13 @@ def call_animate(args: argparse.Namespace, parser: argparse.ArgumentParser):
   check_arg_subcommand("animate", args, parser)
   m_list, p_list, d_list = process.sort_target_type(args.target)
 
-  if not p_list and not d_list:
-    sys.exit("no picture, directory is given!")
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    process.AnimatingMovie(
+      target_list=m_list, is_colored=args.color, fps=args.fps
+    ).execute()
 
   if p_list:
     process.AnimatingPicture(
