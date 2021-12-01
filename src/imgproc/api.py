@@ -13,7 +13,10 @@ from imgproc import process
 
 
 def animate(
-  *, target_list: List[str], is_colored: bool = False, fps: Optional[float] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    fps: Optional[float] = None,
 ):
   """api to animate pictures (note: keyword-only argument)
 
@@ -35,23 +38,21 @@ def animate(
     sys.exit("no movie, picture, directory is given!")
 
   if m_list:
-    r = process.AnimatingMovie(
-      target_list=p_list, is_colored=is_colored, fps=fps
-    ).execute()
+    r = process.AnimatingMovie(target_list=p_list, is_colored=is_colored,
+                               fps=fps).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.AnimatingPicture(
-      target_list=p_list, is_colored=is_colored, fps=fps
-    ).execute()
+    r = process.AnimatingPicture(target_list=p_list, is_colored=is_colored,
+                                 fps=fps).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.AnimatingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, fps=fps
-    ).execute()
+    r = process.AnimatingPictureDirectory(target_list=d_list,
+                                          is_colored=is_colored,
+                                          fps=fps).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -59,7 +60,9 @@ def animate(
 
 
 def binarize(
-  *, target_list: List[str], thresholds: Optional[Tuple[int, int]] = None,
+    *,
+    target_list: List[str],
+    thresholds: Optional[Tuple[int, int]] = None,
 ):
   """api to binarize movie/picture (note: keyword-only argument)
 
@@ -90,9 +93,8 @@ def binarize(
       return_list.extend(r)
 
   if d_list:
-    r = process.BinarizingPictureDirectory(
-      target_list=d_list, thresholds=thresholds
-    ).execute()
+    r = process.BinarizingPictureDirectory(target_list=d_list,
+                                           thresholds=thresholds).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -100,10 +102,10 @@ def binarize(
 
 
 def capture(
-  *,
-  target_list: List[str],
-  is_colored: bool = False,
-  times: Optional[Tuple[float, float, float]] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    times: Optional[Tuple[float, float, float]] = None,
 ):
   """api to capture movies (note: keyword-only argument)
 
@@ -125,9 +127,63 @@ def capture(
     sys.exit("no movie is given!")
 
   if m_list:
-    r = process.CapturingMovie(
-      target_list=m_list, is_colored=is_colored, times=times
-    ).execute()
+    r = process.CapturingMovie(target_list=m_list, is_colored=is_colored,
+                               times=times).execute()
+    if r is not None:
+      return_list.extend(r)
+
+  return return_list if return_list else None
+
+
+def clip(*,
+         target_list: List[str],
+         is_colored: bool = False,
+         positions: Optional[Tuple[int, int, int, int]] = None,
+         is_y_dir: bool = False):
+  """api to clip movie/picture (note: keyword-only argument)
+
+  Args:
+      target_list (List[str]): list of movies, pictures or directories where pictures are stored.
+      is_colored (bool, optional): flag to output in color. Defaults to False.
+      postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+      second_2] positions of areas to clip movie/picture. first area must be smaller
+      than second area. This Defaults to None. If this variable is None, this will be
+      selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
+
+  Returns:
+      return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
+  """
+  if not target_list:
+    sys.exit("no target is given!")
+
+  m_list, p_list, d_list = process.sort_target_type(target_list)
+  return_list: List[str] = []
+
+  if not m_list and not p_list and not d_list:
+    sys.exit("no movie, picture, directory is given!")
+
+  if m_list:
+    r = process.ClippingMovie(target_list=m_list,
+                              is_colored=is_colored,
+                              positions=positions,
+                              is_y_dir=is_y_dir).execute()
+
+    if r is not None:
+      return_list.extend(r)
+
+  if p_list:
+    r = process.ClippingMovie(target_list=m_list,
+                              is_colored=is_colored,
+                              positions=positions,
+                              is_y_dir=is_y_dir).execute()
+    if r is not None:
+      return_list.extend(r)
+
+  if d_list:
+    r = process.ClippingMovie(target_list=m_list,
+                              is_colored=is_colored,
+                              positions=positions,
+                              is_y_dir=is_y_dir).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -135,7 +191,10 @@ def capture(
 
 
 def concatenate(
-  *, target_list: List[str], is_colored: bool = False, number_x: Optional[int] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    number_x: Optional[int] = None,
 ):
   """api to concatenate movie/picture (note: keyword-only argument)
 
@@ -157,23 +216,23 @@ def concatenate(
     sys.exit("no movie, picture, directory is given!")
 
   if m_list:
-    r = process.ConcatenatingMovie(
-      target_list=m_list, is_colored=is_colored, number_x=number_x
-    ).execute()
+    r = process.ConcatenatingMovie(target_list=m_list,
+                                   is_colored=is_colored,
+                                   number_x=number_x).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.ConcatenatingPicture(
-      target_list=p_list, is_colored=is_colored, number_x=number_x
-    ).execute()
+    r = process.ConcatenatingPicture(target_list=p_list,
+                                     is_colored=is_colored,
+                                     number_x=number_x).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.ConcatenatingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, number_x=number_x
-    ).execute()
+    r = process.ConcatenatingPictureDirectory(target_list=d_list,
+                                              is_colored=is_colored,
+                                              number_x=number_x).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -181,10 +240,10 @@ def concatenate(
 
 
 def crop(
-  *,
-  target_list: List[str],
-  is_colored: bool = False,
-  positions: Optional[Tuple[int, int, int, int]] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    positions: Optional[Tuple[int, int, int, int]] = None,
 ):
   """api to crop movie/picture (note: keyword-only argument)
 
@@ -206,23 +265,23 @@ def crop(
     sys.exit("no movie, picture, directory is given!")
 
   if m_list:
-    r = process.CroppingMovie(
-      target_list=m_list, is_colored=is_colored, positions=positions
-    ).execute()
+    r = process.CroppingMovie(target_list=m_list,
+                              is_colored=is_colored,
+                              positions=positions).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.CroppingPicture(
-      target_list=p_list, is_colored=is_colored, positions=positions
-    ).execute()
+    r = process.CroppingPicture(target_list=p_list,
+                                is_colored=is_colored,
+                                positions=positions).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.CroppingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, positions=positions
-    ).execute()
+    r = process.CroppingPictureDirectory(target_list=d_list,
+                                         is_colored=is_colored,
+                                         positions=positions).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -249,16 +308,14 @@ def hist_luminance(*, target_list: List[str], is_colored: bool = False):
     sys.exit("no picture, directory is given!")
 
   if p_list:
-    r = process.CreatingLuminanceHistgramPicture(
-      target_list=p_list, is_colored=is_colored
-    ).execute()
+    r = process.CreatingLuminanceHistgramPicture(target_list=p_list,
+                                                 is_colored=is_colored).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
     r = process.CreatingLuminanceHistgramPictureDirectory(
-      target_list=d_list, is_colored=is_colored
-    ).execute()
+        target_list=d_list, is_colored=is_colored).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -266,10 +323,10 @@ def hist_luminance(*, target_list: List[str], is_colored: bool = False):
 
 
 def resize(
-  *,
-  target_list: List[str],
-  is_colored: bool = False,
-  scales: Optional[Tuple[float, float]] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    scales: Optional[Tuple[float, float]] = None,
 ):
   """api to resize movie/picture (note: keyword-only argument)
 
@@ -291,23 +348,22 @@ def resize(
     sys.exit("no movie, picture, directory is given!")
 
   if m_list:
-    r = process.ResizingMovie(
-      target_list=m_list, is_colored=is_colored, scales=scales
-    ).execute()
+    r = process.ResizingMovie(target_list=m_list, is_colored=is_colored,
+                              scales=scales).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.ResizingPicture(
-      target_list=p_list, is_colored=is_colored, scales=scales
-    ).execute()
+    r = process.ResizingPicture(target_list=p_list,
+                                is_colored=is_colored,
+                                scales=scales).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.ResizingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, scales=scales
-    ).execute()
+    r = process.ResizingPictureDirectory(target_list=d_list,
+                                         is_colored=is_colored,
+                                         scales=scales).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -315,7 +371,10 @@ def resize(
 
 
 def rotate(
-  *, target_list: List[str], is_colored: bool = False, degree: Optional[float] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    degree: Optional[float] = None,
 ):
   """api to rotate movie/picture (note: keyword-only argument)
 
@@ -337,23 +396,22 @@ def rotate(
     sys.exit("no movie, picture, directory is given!")
 
   if m_list:
-    r = process.RotatingMovie(
-      target_list=m_list, is_colored=is_colored, degree=degree
-    ).execute()
+    r = process.RotatingMovie(target_list=m_list, is_colored=is_colored,
+                              degree=degree).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.RotatingPicture(
-      target_list=p_list, is_colored=is_colored, degree=degree
-    ).execute()
+    r = process.RotatingPicture(target_list=p_list,
+                                is_colored=is_colored,
+                                degree=degree).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.RotatingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, degree=degree
-    ).execute()
+    r = process.RotatingPictureDirectory(target_list=d_list,
+                                         is_colored=is_colored,
+                                         degree=degree).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -361,13 +419,13 @@ def rotate(
 
 
 def subtitle(
-  *,
-  target_list: List[str],
-  is_colored: bool = False,
-  text: Optional[str] = None,
-  position: Optional[Tuple[int, int]] = None,
-  size: Optional[float] = None,
-  time: Optional[Tuple[float, float]] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    text: Optional[str] = None,
+    position: Optional[Tuple[int, int]] = None,
+    size: Optional[float] = None,
+    time: Optional[Tuple[float, float]] = None,
 ):
   """api to subtitle movie/picture (note: keyword-only argument)
 
@@ -394,27 +452,31 @@ def subtitle(
 
   if m_list:
     r = process.SubtitlingMovie(
-      target_list=m_list,
-      is_colored=is_colored,
-      text=text,
-      position=position,
-      size=size,
-      time=time,
+        target_list=m_list,
+        is_colored=is_colored,
+        text=text,
+        position=position,
+        size=size,
+        time=time,
     ).execute()
     if r is not None:
       return_list.extend(r)
 
   if p_list:
-    r = process.SubtitlingPicture(
-      target_list=p_list, is_colored=is_colored, text=text, position=position, size=size
-    ).execute()
+    r = process.SubtitlingPicture(target_list=p_list,
+                                  is_colored=is_colored,
+                                  text=text,
+                                  position=position,
+                                  size=size).execute()
     if r is not None:
       return_list.extend(r)
 
   if d_list:
-    r = process.SubtitlingPictureDirectory(
-      target_list=d_list, is_colored=is_colored, text=text, position=position, size=size
-    ).execute()
+    r = process.SubtitlingPictureDirectory(target_list=d_list,
+                                           is_colored=is_colored,
+                                           text=text,
+                                           position=position,
+                                           size=size).execute()
     if r is not None:
       return_list.extend(r)
 
@@ -422,10 +484,10 @@ def subtitle(
 
 
 def trim(
-  *,
-  target_list: List[str],
-  is_colored: bool = False,
-  times: Optional[Tuple[float, float]] = None,
+    *,
+    target_list: List[str],
+    is_colored: bool = False,
+    times: Optional[Tuple[float, float]] = None,
 ):
   """api to trim movies (note: keyword-only argument)
 
@@ -447,9 +509,8 @@ def trim(
     sys.exit("no movie is given!")
 
   if m_list:
-    r = process.TrimmingMovie(
-      target_list=m_list, is_colored=is_colored, times=times
-    ).execute()
+    r = process.TrimmingMovie(target_list=m_list, is_colored=is_colored,
+                              times=times).execute()
     if r is not None:
       return_list.extend(r)
 

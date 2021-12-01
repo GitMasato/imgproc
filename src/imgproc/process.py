@@ -6,6 +6,9 @@ import math
 import numpy
 import pathlib
 from abc import ABCMeta, abstractmethod
+import matplotlib
+
+matplotlib.use('tkagg')
 from matplotlib import pyplot
 from typing import List, Optional, Tuple
 
@@ -1160,6 +1163,529 @@ class CapturingMovie(ABCProcess):
     return cv2.getTrackbarPos("step 10ms\n", cv2_window) * 10 * 0.001
 
 
+class ABCClippingProcess(ABCProcess, metaclass=ABCMeta):
+  """abstract base class of clipping process"""
+
+  def __init__(self,
+               *,
+               target_list: List[str] = [],
+               is_colored: bool = False,
+               positions: Optional[Tuple[int, int, int, int]] = None,
+               is_y_dir: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str]): list of movies, pictures or directories where pictures are stored.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+        second_2] positions of areas to clip movie/picture. first area must be smaller
+        than second area. This Defaults to None. If this variable is None, this will be
+        selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
+    """
+    super().__init__(target_list=target_list, is_colored=is_colored)
+    self.__positions = positions
+    self.__is_y_dir = is_y_dir
+
+  @abstractmethod
+  def execute(self) -> Optional[List[str]]:
+    """clipping process
+
+    Returns:
+        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
+    """
+    pass
+
+  def _get_positions(self) -> Optional[Tuple[int, int, int, int]]:
+    return self.__positions
+
+  def _draw_clipping_line(self, img: numpy.array, W: int, H: int,
+                          positions: Tuple[int, int, int, int]):
+
+    first_1 = positions[0] if positions[0] <= positions[1] else positions[1]
+    first_2 = positions[1] if positions[0] <= positions[1] else positions[0]
+    second_1 = positions[2] if positions[2] <= positions[3] else positions[3]
+    second_2 = positions[3] if positions[2] <= positions[3] else positions[2]
+
+    if self.__is_y_dir is False:
+      cv2.line(img, (first_1, 0), (first_1, H - 1), (255, 255, 255), 2)
+      cv2.line(img, (first_2, 0), (first_2, H - 1), (255, 255, 255), 2)
+      cv2.line(img, (second_1, 0), (second_1, H - 1), (255, 255, 255), 2)
+      cv2.line(img, (second_2, 0), (second_2, H - 1), (255, 255, 255), 2)
+
+      if first_1 != first_2:
+        cv2.rectangle(img, (first_1, 0), (first_2, H - 1), (0, 0, 0), thickness=-1)
+      if second_1 != second_2:
+        cv2.rectangle(img, (second_1, 0), (second_2, H - 1), (0, 0, 0), thickness=-1)
+
+    else:
+      cv2.line(img, (0, first_1), (W - 1, first_1), (255, 255, 255), 2)
+      cv2.line(img, (0, first_2), (W - 1, first_2), (255, 255, 255), 2)
+      cv2.line(img, (0, second_1), (W - 1, second_1), (255, 255, 255), 2)
+      cv2.line(img, (0, second_2), (W - 1, second_2), (255, 255, 255), 2)
+
+      if first_1 is not first_2:
+        cv2.rectangle(img, (0, first_1), (W - 1, first_2), (0, 0, 0), thickness=-1)
+      if second_1 is not second_2:
+        cv2.rectangle(img, (0, second_1), (W - 1, second_2), (0, 0, 0), thickness=-1)
+
+  def _create_area_trackbars(self, cv2_window: str, W: int, H: int):
+    """create 'first_1', 'first_2', 'second_1', 'second_2' trackbars for cv2 GUI"""
+    if self.__is_y_dir is False:
+      cv2.createTrackbar("first_1", cv2_window, 0, W, no)
+      cv2.createTrackbar("first_2", cv2_window, 0, W, no)
+      cv2.createTrackbar("second_1", cv2_window, W, W, no)
+      cv2.createTrackbar("second_2", cv2_window, W, W, no)
+    else:
+      cv2.createTrackbar("first_1", cv2_window, 0, H, no)
+      cv2.createTrackbar("first_2", cv2_window, 0, H, no)
+      cv2.createTrackbar("second_1", cv2_window, H, H, no)
+      cv2.createTrackbar("second_2", cv2_window, H, H, no)
+
+  def _read_area_trackbars(self, cv2_window: str) -> Tuple[int, int, int, int]:
+    """read values from 'first_1', 'first_2', 'second_1', 'second_2' trackbars
+
+    Returns:
+        Tuple[int, int, int, int]: positions of clipping areas
+    """
+    first_1 = cv2.getTrackbarPos("first_1", cv2_window)
+    first_2 = cv2.getTrackbarPos("first_2", cv2_window)
+    second_1 = cv2.getTrackbarPos("second_1", cv2_window)
+    second_2 = cv2.getTrackbarPos("second_2", cv2_window)
+    return first_1, first_2, second_1, second_2
+
+  def _clip(self, img: numpy.array, pos: Tuple[int, int]) -> numpy.array:
+    """clip"""
+
+    if pos[0] == pos[1]:
+      return img
+
+    if self.__is_y_dir is False:
+
+      if pos[0] == 0:
+        return img[0:img.shape[0], pos[1]:img.shape[1]]
+
+      elif pos[1] == img.shape[1]:
+        return img[0:img.shape[0], 0:pos[0]]
+
+      else:
+        clip_1 = img[0:img.shape[0], 0:pos[0]]
+        clip_2 = img[0:img.shape[0], pos[1]:img.shape[1]]
+        return cv2.hconcat([clip_1, clip_2])
+
+    else:
+      if pos[0] == 0:
+        return img[pos[1]:img.shape[0], 0:img.shape[1]]
+
+      elif pos[1] == img.shape[0]:
+        return img[0:pos[0], 0:img.shape[1]]
+
+      else:
+        clip_1 = img[0:pos[0], 0:img.shape[1]]
+        clip_2 = img[pos[1]:img.shape[0], 0:img.shape[1]]
+        return cv2.vconcat([clip_1, clip_2])
+
+  def _get_clipped_image(self, img: numpy.array, pos: Tuple[int, int, int,
+                                                            int]) -> numpy.array:
+    """get clipped image
+
+    Args:
+        img (numpy.array): cv2 image object
+        pos (Tuple[int, int, int, int]): positions of clipping areas
+        pos[2] and pos[3] must be larger than pos[0] and pos[1]
+
+    Returns:
+        img (numpy.array): cv2 image object
+    """
+    first_1 = pos[0] if pos[0] <= pos[1] else pos[1]
+    first_2 = pos[1] if pos[0] <= pos[1] else pos[0]
+    second_1 = pos[2] if pos[2] <= pos[3] else pos[3]
+    second_2 = pos[3] if pos[2] <= pos[3] else pos[2]
+    deduction = first_2 - first_1
+    clipped_1 = self._clip(img, (first_1, first_2))
+    return self._clip(clipped_1, (second_1 - deduction, second_2 - deduction))
+
+
+class ClippingMovie(ABCClippingProcess):
+  """class to clip movie"""
+
+  def __init__(self,
+               *,
+               target_list: List[str] = [],
+               is_colored: bool = False,
+               positions: Optional[Tuple[int, int, int, int]] = None,
+               is_y_dir: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str]): list of movies, pictures or directories where pictures are stored.
+        is_colored (bool, optional): flag to output in color. Defaults to False.
+        postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+        second_2] positions of areas to clip movie/picture. first area must be smaller
+        than second area. This Defaults to None. If this variable is None, this will be
+        selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
+    """
+    super().__init__(target_list=target_list,
+                     is_colored=is_colored,
+                     positions=positions,
+                     is_y_dir=is_y_dir)
+
+  def execute(self) -> Optional[List[str]]:
+    """clipping process
+
+    Returns:
+        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
+    """
+    output_path_list = self._get_output_path(self._get_target_list(), "clipped")
+    return_list: List[str] = []
+
+    for movie, output_path in zip(self._get_target_list(), output_path_list):
+
+      output_name = str(output_path / pathlib.Path(movie).stem) + ".mp4"
+      cap = cv2.VideoCapture(movie)
+      W, H, frames, fps = self._get_movie_info(cap)
+
+      if self._get_positions() is not None:
+        pos = self._get_positions()
+      else:
+        pos = self.__select_positions(output_name, W, H, frames, fps, cap)
+
+      if pos is None:
+        continue
+
+      if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+        print("2nd area must be >= 1st area")
+        continue
+
+      ret, frame = cap.read()
+      output_H, output_W, null = self._get_clipped_image(frame, pos).shape
+
+      cap.set(cv2.CAP_PROP_POS_FRAMES, 0)
+      return_list.append(output_name)
+      self._create_output_directory(output_name)
+      fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+
+      fourcc = cv2.VideoWriter_fourcc(*"mp4v")
+      output = cv2.VideoWriter(output_name, fourcc, fps, (W, H), self._is_colored())
+      output = cv2.VideoWriter(output_name, fourcc, fps, (output_W, output_H),
+                               self._is_colored())
+      print("clipping movie '{0}'...".format(movie))
+
+      while True:
+        ret, frame = cap.read()
+        if not ret:
+          break
+        f1 = self._get_clipped_image(frame, pos)
+        f2 = f1 if self._is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        output.write(f2)
+
+    return return_list if return_list else None
+
+  def __select_positions(
+      self,
+      movie: str,
+      W: int,
+      H: int,
+      frames: int,
+      fps: float,
+      cap: cv2.VideoCapture,
+  ) -> Optional[Tuple[int, int, int, int]]:
+    """select(get) positions for clipping process using GUI window
+
+    Args:
+        movie (str): movie file name
+        W (int): W video length
+        H (int): H video length
+        frames (int): number of total frames of movie
+        fps (float): fps of movie
+        cap (cv2.VideoCapture): cv2 video object
+
+    Returns:
+        Optional[Tuple[int, int, int, int]]: [first_1, first_2, second_1, second_2] four positions to clip image
+    """
+    cv2.namedWindow(movie, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(movie, 500, 700)
+
+    print("--- clip ---\nselect four positions in GUI window! (2nd area must be > 1st)")
+    print("(s: save, h:on/off help, q/esc: abort)")
+
+    help_exists = False
+    self._create_frame_trackbars(movie, frames)
+    self._create_area_trackbars(movie, W, H)
+
+    while True:
+
+      tgt_frame = self._read_frame_trackbars(movie, frames)
+      pos = self._read_area_trackbars(movie)
+      cap.set(cv2.CAP_PROP_POS_FRAMES, tgt_frame)
+      ret, img = cap.read()
+      self._draw_clipping_line(img, W, H, pos)
+
+      if help_exists:
+        h = ["[clip]", "select areas", "s:save", "h:on/off help", "q/esc:abort"]
+        h.append("now: {0:.2f}s".format(tgt_frame / fps))
+        h.append("first: [{0:.1f},{1:.1f}]".format(pos[0], pos[1]))
+        h.append("second: [{0:.1f},{1:.1f}]".format(pos[2], pos[3]))
+        self._add_texts_upper_left(img, h)
+
+      cv2.imshow(movie, img)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+
+        if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+          print("2nd area must be >= 1st area")
+          continue
+
+        else:
+          print("'s' is pressed. positions are saved {0}".format(pos))
+          cv2.destroyAllWindows()
+          return pos
+
+      elif k == ord("h"):
+        help_exists = False if help_exists else True
+
+      else:
+        if self._press_q_or_Esc(k):
+          return None
+
+
+class ClippingPicture(ABCClippingProcess):
+  """class to clip picture"""
+
+  def __init__(self,
+               *,
+               target_list: List[str] = [],
+               is_colored: bool = False,
+               positions: Optional[Tuple[int, int, int, int]] = None,
+               is_y_dir: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+        second_2] positions of areas to clip movie/picture. first area must be smaller
+        than second area. This Defaults to None. If this variable is None, this will be
+        selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
+    """
+    super().__init__(target_list=target_list,
+                     is_colored=is_colored,
+                     positions=positions,
+                     is_y_dir=is_y_dir)
+
+  def execute(self) -> Optional[List[str]]:
+    """clipping process
+
+    Returns:
+        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
+    """
+    output_path_list = self._get_output_path(self._get_target_list(), "clipped")
+    return_list: List[str] = []
+
+    for picture, output_path in zip(self._get_target_list(), output_path_list):
+
+      name = str(output_path / pathlib.Path(picture).name)
+      img = cv2.imread(picture)
+
+      if self._get_positions() is not None:
+        pos = self._get_positions()
+      else:
+        pos = self.__select_positions(name, img)
+
+      if pos is None:
+        continue
+
+      if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+        print("2nd area must be >= 1st area")
+        continue
+
+      print("clipping picture '{0}'...".format(picture))
+      return_list.append(name)
+      f1 = self._get_clipped_image(img, pos)
+      f2 = f1 if self._is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+      self._create_output_directory(name)
+      cv2.imwrite(name, f2)
+
+    return return_list if return_list else None
+
+  def __select_positions(self, picture: str,
+                         img: numpy.array) -> Optional[Tuple[int, int, int, int]]:
+    """select(get) positions for clipping process using GUI window
+
+    Args:
+        picture (str): image name
+        img (numpy.array): cv2 image object
+
+    Returns:
+        Optional[Tuple[int, int, int, int]]: [first_1, first_2, second_1, second_2] four positions to clip image
+    """
+    cv2.namedWindow(picture, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(picture, 500, 700)
+
+    print("--- clip ---\nselect four positions in GUI window! (2nd area must be > 1st)")
+    print("(s: save, h:on/off help, q/esc: abort)")
+
+    W, H = img.shape[1], img.shape[0]
+    help_exists = False
+    self._create_area_trackbars(picture, W, H)
+
+    while True:
+
+      img_show = img.copy()
+      pos = self._read_area_trackbars(picture)
+      self._draw_clipping_line(img_show, W, H, pos)
+
+      if help_exists:
+        h = ["[clip]", "select areas", "s:save", "h:on/off help", "q/esc:abort"]
+        h.append("first: [{0:.1f},{1:.1f}]".format(pos[0], pos[1]))
+        h.append("second: [{0:.1f},{1:.1f}]".format(pos[2], pos[3]))
+        self._add_texts_upper_left(img, h)
+
+      cv2.imshow(picture, img_show)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+
+        if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+          print("2nd area must be >= 1st area")
+          continue
+
+        else:
+          print("'s' is pressed. positions are saved {0}".format(pos))
+          cv2.destroyAllWindows()
+          return pos
+
+      elif k == ord("h"):
+        help_exists = False if help_exists else True
+
+      else:
+        if self._press_q_or_Esc(k):
+          return None
+
+
+class ClippingPictureDirectory(ABCClippingProcess):
+  """class to clip picture"""
+
+  def __init__(self,
+               *,
+               target_list: List[str] = [],
+               is_colored: bool = False,
+               positions: Optional[Tuple[int, int, int, int]] = None,
+               is_y_dir: bool = False):
+    """constructor
+
+    Args:
+        target_list (List[str], optional): list of target inputs. Defaults to []        is_colored (bool, optional): flag to output in color. Defaults to False.
+        postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+        second_2] positions of areas to clip movie/picture. first area must be smaller
+        than second area. This Defaults to None. If this variable is None, this will be
+        selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
+    """
+    super().__init__(target_list=target_list,
+                     is_colored=is_colored,
+                     positions=positions,
+                     is_y_dir=is_y_dir)
+
+  def execute(self) -> Optional[List[str]]:
+    """clipping process
+
+    Returns:
+        Optional[List[str]]: list of output path names. if process is not executed, None is returned.
+    """
+    output_path_list = self._get_output_path(self._get_target_list(), "clipped")
+    return_list: List[str] = []
+
+    for directory, output_path in zip(self._get_target_list(), output_path_list):
+
+      directory_path = pathlib.Path(directory)
+      p_list = [str(p) for p in list(directory_path.iterdir())]
+
+      if not p_list:
+        print("no file exists in '{0}'!".format(directory))
+        continue
+
+      if self._get_positions() is not None:
+        pos = self._get_positions()
+      else:
+        pos = self.__select_positions(str(output_path), p_list)
+
+      if pos is None:
+        continue
+
+      if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+        print("2nd area must be >= 1st area")
+        continue
+
+      return_list.append(str(output_path))
+      print("clipping picture in '{0}'...".format(directory))
+
+      for p in p_list:
+
+        img = cv2.imread(p)
+        f1 = self._get_clipped_image(img, pos)
+        f2 = f1 if self._is_colored() else cv2.cvtColor(f1, cv2.COLOR_BGR2GRAY)
+        self._create_output_directory(str(output_path / pathlib.Path(p).name))
+        cv2.imwrite(str(output_path / pathlib.Path(p).name), f2)
+
+    return return_list if return_list else None
+
+  def __select_positions(
+      self, directory: str,
+      picture_list: List[str]) -> Optional[Tuple[int, int, int, int]]:
+    """select(get) positions for clipping process using GUI window
+
+    Args:
+        directory (str): directory name
+        picture_list (List[str]): picture list
+
+    Returns:
+        Optional[Tuple[int, int, int, int]]: [first_1, first_2, second_1, second_2] four positions to clip image
+    """
+    cv2.namedWindow(directory, cv2.WINDOW_NORMAL)
+    cv2.resizeWindow(directory, 500, 700)
+
+    print("--- clip ---\nselect four positions in GUI window! (2nd area must be > 1st)")
+    print("(s: save, h:on/off help, q/esc: abort)")
+
+    H, W, null = cv2.imread(picture_list[0]).shape
+    help_exists = False
+    self._create_frame_trackbars(directory, len(picture_list) - 1)
+    self._create_area_trackbars(directory, W, H)
+
+    while True:
+
+      tgt_frame = self._read_frame_trackbars(directory, len(picture_list) - 1)
+      img = cv2.imread(picture_list[tgt_frame])
+      pos = self._read_area_trackbars(directory)
+      self._draw_clipping_line(img, W, H, pos)
+
+      if help_exists:
+        h = ["[clip]", "select areas", "s:save", "h:on/off help", "q/esc:abort"]
+        h.append("first: [{0:.1f},{1:.1f}]".format(pos[0], pos[1]))
+        h.append("second: [{0:.1f},{1:.1f}]".format(pos[2], pos[3]))
+        self._add_texts_upper_left(img, h)
+
+      cv2.imshow(directory, img)
+      k = cv2.waitKey(1) & 0xFF
+
+      if k == ord("s"):
+
+        if pos[3] < pos[1] or pos[3] < pos[0] or pos[2] < pos[1] or pos[2] < pos[0]:
+          print("2nd area must be >= 1st area")
+          continue
+
+        else:
+          print("'s' is pressed. positions are saved {0}".format(pos))
+          cv2.destroyAllWindows()
+          return pos
+
+      elif k == ord("h"):
+        help_exists = False if help_exists else True
+
+      else:
+        if self._press_q_or_Esc(k):
+          return None
+
+
 class ABCConcatenatingProcess(ABCProcess, metaclass=ABCMeta):
   """abstract base class of concatenating process"""
 
@@ -1704,7 +2230,7 @@ class CroppingMovie(ABCCroppingProcess):
                      positions=positions)
 
   def execute(self) -> Optional[List[str]]:
-    """capturing process
+    """cropping process
 
     Returns:
         Optional[List[str]]: list of output path names. if process is not executed, None is returned.
@@ -1823,7 +2349,7 @@ class CroppingMovie(ABCCroppingProcess):
 
 
 class CroppingPicture(ABCCroppingProcess):
-  """class to capture picture"""
+  """class to crop picture"""
 
   def __init__(
       self,
@@ -1879,7 +2405,7 @@ class CroppingPicture(ABCCroppingProcess):
 
   def __select_positions(self, picture: str,
                          img: numpy.array) -> Optional[Tuple[int, int, int, int]]:
-    """select(get) two positions for capring process using GUI window
+    """select(get) two positions for cropping process using GUI window
 
     Args:
         picture (str): image name
@@ -1939,7 +2465,7 @@ class CroppingPicture(ABCCroppingProcess):
 
 
 class CroppingPictureDirectory(ABCCroppingProcess):
-  """class to capture picture"""
+  """class to crop picture"""
 
   def __init__(
       self,
@@ -2004,7 +2530,7 @@ class CroppingPictureDirectory(ABCCroppingProcess):
   def __select_positions(
       self, directory: str,
       picture_list: List[str]) -> Optional[Tuple[int, int, int, int]]:
-    """select(get) two positions for capring process using GUI window
+    """select(get) two positions for cropping process using GUI window
 
     Args:
         directory (str): directory name
