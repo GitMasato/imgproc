@@ -1207,10 +1207,10 @@ class ABCClippingProcess(ABCProcess, metaclass=ABCMeta):
     second_2 = positions[3] if positions[2] <= positions[3] else positions[2]
 
     if self.__is_y_dir is False:
-      cv2.line(img, (first_1, 0), (first_1, H - 1), (255, 255, 255), 2)
-      cv2.line(img, (first_2, 0), (first_2, H - 1), (255, 255, 255), 2)
-      cv2.line(img, (second_1, 0), (second_1, H - 1), (255, 255, 255), 2)
-      cv2.line(img, (second_2, 0), (second_2, H - 1), (255, 255, 255), 2)
+      cv2.line(img, (first_1, 0), (first_1, H - 1), (255, 255, 255), 8)
+      cv2.line(img, (first_2, 0), (first_2, H - 1), (255, 255, 255), 8)
+      cv2.line(img, (second_1, 0), (second_1, H - 1), (255, 255, 255), 8)
+      cv2.line(img, (second_2, 0), (second_2, H - 1), (255, 255, 255), 8)
 
       if first_1 != first_2:
         cv2.rectangle(img, (first_1, 0), (first_2, H - 1), (0, 0, 0), thickness=-1)
@@ -1218,10 +1218,10 @@ class ABCClippingProcess(ABCProcess, metaclass=ABCMeta):
         cv2.rectangle(img, (second_1, 0), (second_2, H - 1), (0, 0, 0), thickness=-1)
 
     else:
-      cv2.line(img, (0, first_1), (W - 1, first_1), (255, 255, 255), 2)
-      cv2.line(img, (0, first_2), (W - 1, first_2), (255, 255, 255), 2)
-      cv2.line(img, (0, second_1), (W - 1, second_1), (255, 255, 255), 2)
-      cv2.line(img, (0, second_2), (W - 1, second_2), (255, 255, 255), 2)
+      cv2.line(img, (0, first_1), (W - 1, first_1), (255, 255, 255), 8)
+      cv2.line(img, (0, first_2), (W - 1, first_2), (255, 255, 255), 8)
+      cv2.line(img, (0, second_1), (W - 1, second_1), (255, 255, 255), 8)
+      cv2.line(img, (0, second_2), (W - 1, second_2), (255, 255, 255), 8)
 
       if first_1 is not first_2:
         cv2.rectangle(img, (0, first_1), (W - 1, first_2), (0, 0, 0), thickness=-1)
@@ -2187,14 +2187,14 @@ class ABCCroppingProcess(ABCProcess, metaclass=ABCMeta):
   def _draw_cropping_line(self, img: numpy.array, W: int, H: int,
                           points: List[Tuple[int, int]]):
     if len(points) == 1:
-      cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), (255, 255, 255), 2)
-      cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), (255, 255, 255), 2)
+      cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), (255, 255, 255), 8)
+      cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), (255, 255, 255), 8)
 
     elif len(points) == 2:
-      cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), (255, 255, 255), 2)
-      cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), (255, 255, 255), 2)
-      cv2.line(img, (points[1][0], 0), (points[1][0], H - 1), (255, 255, 255), 2)
-      cv2.line(img, (0, points[1][1]), (W - 1, points[1][1]), (255, 255, 255), 2)
+      cv2.line(img, (points[0][0], 0), (points[0][0], H - 1), (255, 255, 255), 8)
+      cv2.line(img, (0, points[0][1]), (W - 1, points[0][1]), (255, 255, 255), 8)
+      cv2.line(img, (points[1][0], 0), (points[1][0], H - 1), (255, 255, 255), 8)
+      cv2.line(img, (0, points[1][1]), (W - 1, points[1][1]), (255, 255, 255), 8)
 
   def _mouse_on_select_cropping_position(self, event, x, y, flags, params):
     """call back function on mouse click
