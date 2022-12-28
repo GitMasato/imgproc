@@ -13,7 +13,7 @@ mccabe==0.6.1
 more-itertools==8.2.0
 mypy==0.770
 mypy-extensions==0.4.3
-numpy==1.18.2
+numpy==1.22.0
 opencv-python==4.2.0.34
 packaging==20.3
 pathspec==0.8.0
