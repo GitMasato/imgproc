@@ -145,9 +145,9 @@ def clip(*,
   Args:
       target_list (List[str]): list of movies, pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      postisions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
+      positions (Tuple[int, int, int, int], optional): [first_1, first_2, second_1,
       second_2] positions of areas to clip movie/picture. first area must be smaller
-      than second area. This Defaults to None. If this variable is None, this will be
+      than second area. Defaults to None. If this variable is None, this will be
       selected using GUI window is_y_dir (bool, optional): flag to clip in y direction. Defaults to False.
 
   Returns:
@@ -172,7 +172,7 @@ def clip(*,
       return_list.extend(r)
 
   if p_list:
-    r = process.ClippingMovie(target_list=m_list,
+    r = process.ClippingPicture(target_list=p_list,
                               is_colored=is_colored,
                               positions=positions,
                               is_y_dir=is_y_dir).execute()
@@ -180,7 +180,7 @@ def clip(*,
       return_list.extend(r)
 
   if d_list:
-    r = process.ClippingMovie(target_list=m_list,
+    r = process.ClippingPictureDirectory(target_list=d_list,
                               is_colored=is_colored,
                               positions=positions,
                               is_y_dir=is_y_dir).execute()
@@ -250,7 +250,7 @@ def crop(
   Args:
       target_list (List[str]): list of movies, pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      postisions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
+      potisions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
 
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
@@ -289,7 +289,7 @@ def crop(
 
 
 def hist_luminance(*, target_list: List[str], is_colored: bool = False):
-  """api to create histgram of luminance (bgr or gray) of picture (note: keyword-only argument)
+  """api to create histogram of luminance (bgr or gray) of picture (note: keyword-only argument)
 
   Args:
       target_list (List[str]): list of paths of pictures or directories where pictures are stored.
