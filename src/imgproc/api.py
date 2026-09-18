@@ -250,7 +250,7 @@ def crop(
   Args:
       target_list (List[str]): list of movies, pictures or directories where pictures are stored.
       is_colored (bool, optional): flag to output in color. Defaults to False.
-      potisions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
+      positions (Tuple[int, int, int, int], optional): [x_1, y_1,x_2, y_2] two positions to crop movie/picture. position_1 must be smaller than position_2 Defaults to None. If this variable is None, this will be selected using GUI window
 
   Returns:
       return (List[str], optional): list of processed pictures, directories where      pictures are stored, and movies. if no process is executed, None is returned
