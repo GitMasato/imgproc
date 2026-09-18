@@ -1,7 +1,10 @@
 """process module containing image process functions
 """
+import os
+os.environ["QT_QPA_PLATFORM"] = "xcb"
+
 import cv2
-import imghdr
+import filetype
 import math
 import numpy
 import pathlib
@@ -31,7 +34,7 @@ def sort_target_type(target_list: List[str]) -> Tuple[List[str], List[str], List
 
     elif pathlib.Path(target).is_file():
 
-      if imghdr.what(target) is not None:
+      if filetype.is_image(target):
         picture_list.append(target)
       else:
         movie_list.append(target)
@@ -202,8 +205,8 @@ class ABCProcess(metaclass=ABCMeta):
 
     for id, text in enumerate(texts):
       pos = (position[0], position[1] + 30 * (id + 1))
-      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 10)
-      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 2)
+      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255), 5)
+      cv2.putText(img, text, pos, cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 1)
 
 
 class ABCAnimatingProcess(ABCProcess, metaclass=ABCMeta):
@@ -3781,8 +3784,8 @@ class SubtitlingMovie(ABCSubtitlingProcess):
 
       if point:
         cv2.putText(img, text, point[0], cv2.FONT_HERSHEY_DUPLEX, 1.0, (255, 255, 255),
-                    10)
-        cv2.putText(img, text, point[0], cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 2)
+                    5)
+        cv2.putText(img, text, point[0], cv2.FONT_HERSHEY_DUPLEX, 1.0, (0, 0, 0), 1)
 
       if help_exists:
         h = ["[subtitle]", "select position, size, time", "s: save"]
